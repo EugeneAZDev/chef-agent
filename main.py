@@ -1,40 +1,78 @@
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from adapters.db import Database
-from config import Config
+"""
+Chef Agent FastAPI application.
 
-# Ensure database directory exists
-Config.ensure_db_directory()
+This is the main entry point for the Chef Agent API.
+"""
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from adapters.db import Database
+from api.limiter import rate_limit_middleware
+from api.middleware import LoggingMiddleware, SecurityHeadersMiddleware
 
 # Global database instance
-db = Database(Config.DATABASE_PATH)
+db = Database()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager for database initialization."""
-    # Initialize database on startup
-    db.get_connection()  # This will create schema if needed
-    print("Database initialized successfully")
-    
+    # Database is initialized via migrations in Dockerfile
+    # or manually via: poetry run python -m scripts.migrate
+    print("Chef Agent API started successfully")
+
     yield
-    
+
     # Cleanup on shutdown
     db.close()
-    print("Database connection closed")
+    print("Chef Agent API stopped")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Chef Agent API",
+    description="AI-powered meal planning and shopping list management",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8501",
+    ],  # Add your frontend URLs
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
+
+# Add security middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(LoggingMiddleware)
+
+# Add rate limiting
+app.middleware("http")(rate_limit_middleware)
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "system": "Server is running!"}
+    """Health check endpoint."""
+    return {"status": "ok", "service": "Chef Agent API", "version": "1.0.0"}
 
 
 @app.get("/")
 def read_root():
-    return {"Hello": "from FastAPI"}
+    """Root endpoint with API information."""
+    return {
+        "message": "Chef Agent API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
+    }
 
 
 @app.get("/db/status")
@@ -43,16 +81,16 @@ def database_status():
     try:
         conn = db.get_connection()
         cursor = conn.execute("SELECT COUNT(*) as count FROM recipes")
-        recipe_count = cursor.fetchone()['count']
-        
+        recipe_count = cursor.fetchone()["count"]
+
         cursor = conn.execute("SELECT COUNT(*) as count FROM shopping_lists")
-        list_count = cursor.fetchone()['count']
-        
+        list_count = cursor.fetchone()["count"]
+
         return {
             "status": "connected",
             "database_path": db.db_path,
             "recipes_count": recipe_count,
-            "shopping_lists_count": list_count
+            "shopping_lists_count": list_count,
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}

@@ -11,6 +11,6 @@ from .shopping_list_repository import SQLiteShoppingListRepository
 
 __all__ = [
     "Database",
-    "SQLiteRecipeRepository", 
+    "SQLiteRecipeRepository",
     "SQLiteShoppingListRepository",
 ]

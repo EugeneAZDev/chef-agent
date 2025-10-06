@@ -9,7 +9,11 @@ def test_read_root():
     """Test the root endpoint."""
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"Hello": "from FastAPI"}
+    data = response.json()
+    assert data["message"] == "Chef Agent API"
+    assert data["version"] == "1.0.0"
+    assert "docs" in data
+    assert "health" in data
 
 
 def test_health_check():
@@ -18,5 +22,5 @@ def test_health_check():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert "system" in data
-    assert "Server is running!" in data["system"]
+    assert data["service"] == "Chef Agent API"
+    assert data["version"] == "1.0.0"
