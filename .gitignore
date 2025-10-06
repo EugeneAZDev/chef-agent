@@ -37,3 +37,17 @@ htmlcov/
 
 # Pre-commit
 .pre-commit-cache/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+agent_memory.sqlite
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment variables
+.env.local
+.env.production
