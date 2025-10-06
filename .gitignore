@@ -29,3 +29,11 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Pre-commit
+.pre-commit-cache/

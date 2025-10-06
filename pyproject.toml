@@ -1,18 +1,24 @@
-[project]
+[tool.poetry]
 name = "chef-agent"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "EugeneAZDev",email = "eugene.zolotkov@gmail.com"}
-]
+description = "A FastAPI-based web service for chef management and operations"
+authors = ["EugeneAZDev <eugene.zolotkov@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "fastapi (>=0.118.0,<0.119.0)",
-    "uvicorn[standard] (>=0.37.0,<0.38.0)"
-]
+package-mode = false
+[tool.poetry.dependencies]
+python = ">=3.13"
+fastapi = ">=0.118.0,<0.119.0"
+uvicorn = {extras = ["standard"], version = ">=0.37.0,<0.38.0"}
+httpx = ">=0.25.0,<0.26.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0,<9.0.0"
+pytest-asyncio = ">=0.23.0,<0.24.0"
+black = ">=24.0.0,<25.0.0"
+flake8 = ">=7.0.0,<8.0.0"
+isort = ">=5.13.0,<6.0.0"
+pre-commit = ">=3.6.0,<4.0.0"
 
 
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.poetry.scripts]
+start = "uvicorn main:app --host 0.0.0.0 --port 8000"
