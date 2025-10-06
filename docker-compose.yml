@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # Redis for rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Server
+  mcp-server:
+    build: .
+    restart: unless-stopped
+    command: poetry run uvicorn mcp_server.main:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+    environment:
+      - SQLITE_DB=/app/data/chef_agent.db
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - sqlite_data:/app/data
+      - ./migrations:/app/migrations:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Main Application
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SQLITE_DB=/app/data/chef_agent.db
+      - REDIS_URL=redis://redis:6379
+      - MCP_SERVER_URL=http://mcp-server:8002
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - MODEL_NAME=llama-3.1-8b-instant
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - RATE_LIMIT_PER_MINUTE=10
+      - DEFAULT_LANGUAGE=en
+    volumes:
+      - sqlite_data:/app/data
+      - ./migrations:/app/migrations:ro
+      - ./locales:/app/locales:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Web UI (Streamlit)
+  ui:
+    build: .
+    restart: unless-stopped
+    command: poetry run streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://app:8000
+    depends_on:
+      app:
+        condition: service_healthy
+    profiles:
+      - ui
+
+volumes:
+  sqlite_data:
+    driver: local
+  redis_data:
+    driver: local
