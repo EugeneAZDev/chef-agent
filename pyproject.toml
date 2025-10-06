@@ -1,0 +1,18 @@
+[project]
+name = "chef-agent"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "EugeneAZDev",email = "eugene.zolotkov@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi (>=0.118.0,<0.119.0)",
+    "uvicorn[standard] (>=0.37.0,<0.38.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
