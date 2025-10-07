@@ -133,7 +133,9 @@ def generate_sql_migration(recipes: List[Recipe], output_path: Path) -> None:
             f.write(f"  {recipe.prep_time_minutes or 'NULL'},\n")
             f.write(f"  {recipe.cook_time_minutes or 'NULL'},\n")
             f.write(f"  {recipe.servings or 'NULL'},\n")
-            difficulty_value = f'"{recipe.difficulty}"' if recipe.difficulty else "NULL"
+            difficulty_value = (
+                f'"{recipe.difficulty}"' if recipe.difficulty else "NULL"
+            )
             f.write(f"  {difficulty_value}\n")
             f.write(");\n\n")
 

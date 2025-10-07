@@ -1,6 +1,6 @@
 # Chef Agent Makefile
 
-.PHONY: help install test lint format migrate seed clean run dev
+.PHONY: help install test lint format migrate seed clean run dev mcp-server
 
 # Default target
 help:
@@ -14,6 +14,7 @@ help:
 	@echo "  clean      - Clean temporary files"
 	@echo "  run        - Run the application"
 	@echo "  dev        - Run in development mode"
+	@echo "  mcp-server - Run MCP server"
 
 # Install dependencies
 install:
@@ -93,3 +94,8 @@ demo:
 	@echo "3. Testing security headers..."
 	curl -I http://localhost:8000/health 2>/dev/null | grep -E "(X-|Strict-|Content-Security)" || echo "Headers check completed"
 	@echo "Demo completed! 🎉"
+
+# Run MCP server
+mcp-server:
+	@echo "Starting MCP server..."
+	poetry run python -m scripts.run_mcp_server

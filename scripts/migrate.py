@@ -55,7 +55,8 @@ class MigrationManager:
             try:
                 conn.executescript(sql_content)
                 conn.execute(
-                    f"INSERT INTO {self.version_table}(version) VALUES (?)", (version,)
+                    f"INSERT INTO {self.version_table}(version) VALUES (?)",
+                    (version,),
                 )
                 print(f"  Migration {version} applied successfully")
             except Exception as e:
@@ -75,7 +76,8 @@ class MigrationManager:
                 undo_sql = undo_file.read_text(encoding="utf-8")
                 conn.executescript(undo_sql)
                 conn.execute(
-                    f"DELETE FROM {self.version_table} WHERE version = ?", (version,)
+                    f"DELETE FROM {self.version_table} WHERE version = ?",
+                    (version,),
                 )
                 print(f"  Migration {version} rolled back successfully")
             except Exception as e:
@@ -132,7 +134,9 @@ def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(description="Database migration tool")
     parser.add_argument("--undo", help="Rollback specific migration")
-    parser.add_argument("--status", action="store_true", help="Show migration status")
+    parser.add_argument(
+        "--status", action="store_true", help="Show migration status"
+    )
 
     args = parser.parse_args()
 

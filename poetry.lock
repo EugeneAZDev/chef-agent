@@ -1523,10 +1523,8 @@ description = "Model Context Protocol SDK"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-files = [
-    {file = "mcp-1.16.0-py3-none-any.whl", hash = "sha256:ec917be9a5d31b09ba331e1768aa576e0af45470d657a0319996a20a57d7d633"},
-    {file = "mcp-1.16.0.tar.gz", hash = "sha256:39b8ca25460c578ee2cdad33feeea122694cfdf73eef58bee76c42f6ef0589df"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 anyio = ">=4.5"
@@ -1545,6 +1543,12 @@ uvicorn = {version = ">=0.31.1", markers = "sys_platform != \"emscripten\""}
 cli = ["python-dotenv (>=1.0.0)", "typer (>=0.16.0)"]
 rich = ["rich (>=13.9.4)"]
 ws = ["websockets (>=15.0.1)"]
+
+[package.source]
+type = "git"
+url = "https://github.com/modelcontextprotocol/python-sdk.git"
+reference = "v1.16.0"
+resolved_reference = "3e798bfc01856df711b921f7f3b55379fbd087e4"
 
 [[package]]
 name = "mdurl"
@@ -3798,4 +3802,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "5c7e169746259df380103d312d22fab10aad26ec2d70f0f9e27b6137941622cb"
+content-hash = "0c5bb186ed56d7495a87109e01eafc3231fd43ca4b8dcdef85f060a9ce17ec0c"

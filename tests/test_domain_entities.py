@@ -73,7 +73,10 @@ def test_meal_plan_creation():
     ]
 
     recipe = Recipe(
-        id=1, title="Pancakes", ingredients=ingredients, instructions="Mix and cook"
+        id=1,
+        title="Pancakes",
+        ingredients=ingredients,
+        instructions="Mix and cook",
     )
 
     # Create a meal

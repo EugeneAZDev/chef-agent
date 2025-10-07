@@ -17,6 +17,18 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
     def __init__(self, db: Database):
         self.db = db
 
+    def create(
+        self, shopping_list: ShoppingList, thread_id: str
+    ) -> ShoppingList:
+        """Create a new shopping list for a thread."""
+        return self._create_shopping_list(shopping_list, thread_id)
+
+    def update(
+        self, shopping_list: ShoppingList, thread_id: str
+    ) -> ShoppingList:
+        """Update an existing shopping list."""
+        return self._create_shopping_list(shopping_list, thread_id)
+
     def get_by_id(self, list_id: int) -> Optional[ShoppingList]:
         """Get a shopping list by its ID."""
         query = "SELECT * FROM shopping_lists WHERE id = ?"
@@ -39,7 +51,9 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
         row = rows[0]
         return self._row_to_shopping_list(row)
 
-    def save(self, shopping_list: ShoppingList, thread_id: str) -> ShoppingList:
+    def save(
+        self, shopping_list: ShoppingList, thread_id: str
+    ) -> ShoppingList:
         """Save a shopping list for a specific thread."""
         # Check if shopping list already exists for this thread
         existing = self.get_by_thread_id(thread_id)

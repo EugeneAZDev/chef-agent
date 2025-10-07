@@ -50,6 +50,9 @@ class Recipe:
     servings: Optional[int] = None
     tags: List[str] = None
     difficulty: Optional[str] = None  # "easy", "medium", "hard"
+    diet_type: Optional[str] = (
+        None  # "vegetarian", "vegan", "gluten_free", etc.
+    )
 
     def __post_init__(self):
         if self.ingredients is None:
@@ -126,6 +129,10 @@ class ShoppingList:
 
     def __len__(self) -> int:
         return len(self.items)
+
+    def __bool__(self) -> bool:
+        """Return True if the shopping list exists (is not None)."""
+        return True
 
 
 @dataclass

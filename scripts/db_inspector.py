@@ -77,7 +77,8 @@ def inspect_database(db_path: str = "chef_agent.db"):
 
     # Get indexes
     cursor.execute(
-        "SELECT name, sql FROM sqlite_master WHERE type='index' " "AND sql IS NOT NULL"
+        "SELECT name, sql FROM sqlite_master WHERE type='index' "
+        "AND sql IS NOT NULL"
     )
     indexes = cursor.fetchall()
 

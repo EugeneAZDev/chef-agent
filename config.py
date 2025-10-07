@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Database settings
-    database_url: str = Field(default="sqlite:///./chef_agent.db", alias="DATABASE_URL")
+    database_url: str = Field(
+        default="sqlite:///./chef_agent.db", alias="DATABASE_URL"
+    )
     sqlite_db: str = Field(default="chef_agent.db", alias="SQLITE_DB")
 
     # AI/LLM settings
@@ -25,7 +27,9 @@ class Settings(BaseSettings):
     # MCP Server settings
     mcp_server_host: str = Field(default="localhost", alias="MCP_SERVER_HOST")
     mcp_server_port: int = Field(default=8002, alias="MCP_SERVER_PORT")
-    mcp_server_url: str = Field(default="http://localhost:8002", alias="MCP_SERVER_URL")
+    mcp_server_url: str = Field(
+        default="http://localhost:8002", alias="MCP_SERVER_URL"
+    )
 
     # FastAPI settings
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
@@ -36,11 +40,17 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
 
     # Security settings
-    secret_key: str = Field(default="change-me-in-production", alias="SECRET_KEY")
-    csrf_secret: str = Field(default="csrf-secret-change-me", alias="CSRF_SECRET")
+    secret_key: str = Field(
+        default="change-me-in-production", alias="SECRET_KEY"
+    )
+    csrf_secret: str = Field(
+        default="csrf-secret-change-me", alias="CSRF_SECRET"
+    )
 
     # Rate limiting
-    rate_limit_per_minute: int = Field(default=10, alias="RATE_LIMIT_PER_MINUTE")
+    rate_limit_per_minute: int = Field(
+        default=10, alias="RATE_LIMIT_PER_MINUTE"
+    )
 
     # Internationalization
     default_language: str = Field(default="en", alias="DEFAULT_LANGUAGE")
@@ -50,7 +60,9 @@ class Settings(BaseSettings):
 
     # File paths
     data_dir: Path = Field(default=Path("data"), alias="DATA_DIR")
-    migrations_dir: Path = Field(default=Path("migrations"), alias="MIGRATIONS_DIR")
+    migrations_dir: Path = Field(
+        default=Path("migrations"), alias="MIGRATIONS_DIR"
+    )
     locales_dir: Path = Field(default=Path("locales"), alias="LOCALES_DIR")
 
     # Development settings

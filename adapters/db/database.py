@@ -26,7 +26,9 @@ class Database:
     def get_connection(self) -> sqlite3.Connection:
         """Get database connection, creating it if necessary."""
         if self._connection is None:
-            self._connection = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._connection = sqlite3.connect(
+                self.db_path, check_same_thread=False
+            )
             self._connection.row_factory = sqlite3.Row
             self._create_schema()
         return self._connection
@@ -53,6 +55,7 @@ class Database:
                 cook_time_minutes INTEGER,
                 servings INTEGER,
                 difficulty TEXT,
+                diet_type TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -76,8 +79,8 @@ class Database:
                 recipe_id INTEGER,
                 tag_id INTEGER,
                 PRIMARY KEY (recipe_id, tag_id),
-                FOREIGN KEY (recipe_id) REFERENCES recipes(id) "
-                "ON DELETE CASCADE,
+                FOREIGN KEY (recipe_id) REFERENCES recipes(id)
+                ON DELETE CASCADE,
                 FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
             )
         """
@@ -110,7 +113,9 @@ class Database:
         )
 
         # Create indexes for better performance
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title)"
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_shopping_lists_thread_id "

@@ -53,11 +53,15 @@ class SQLiteRecipeRepository(RecipeRepository):
 
         return [self._row_to_recipe(row) for row in rows]
 
-    def search_by_diet_type(self, diet_type: DietType, limit: int = 10) -> List[Recipe]:
+    def search_by_diet_type(
+        self, diet_type: DietType, limit: int = 10
+    ) -> List[Recipe]:
         """Search recipes by diet type."""
         return self.search_by_tags([diet_type.value], limit)
 
-    def search_by_keywords(self, keywords: List[str], limit: int = 10) -> List[Recipe]:
+    def search_by_keywords(
+        self, keywords: List[str], limit: int = 10
+    ) -> List[Recipe]:
         """Search recipes by keywords in title or description."""
         if not keywords:
             return []
@@ -126,8 +130,8 @@ class SQLiteRecipeRepository(RecipeRepository):
         # Insert recipe
         query = """
             INSERT INTO recipes (title, description, instructions, prep_time_minutes,
-                               cook_time_minutes, servings, difficulty)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                               cook_time_minutes, servings, difficulty, diet_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
         recipe_id = self.db.execute_insert(
             query,
@@ -139,6 +143,7 @@ class SQLiteRecipeRepository(RecipeRepository):
                 recipe.cook_time_minutes,
                 recipe.servings,
                 recipe.difficulty,
+                recipe.diet_type,
             ),
         )
 
@@ -159,7 +164,8 @@ class SQLiteRecipeRepository(RecipeRepository):
             UPDATE recipes
             SET title = ?, description = ?, instructions = ?,
                 prep_time_minutes = ?, cook_time_minutes = ?,
-                servings = ?, difficulty = ?, updated_at = CURRENT_TIMESTAMP
+                servings = ?, difficulty = ?, diet_type = ?,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """
         self.db.execute_update(
@@ -172,6 +178,7 @@ class SQLiteRecipeRepository(RecipeRepository):
                 recipe.cook_time_minutes,
                 recipe.servings,
                 recipe.difficulty,
+                recipe.diet_type,
                 recipe.id,
             ),
         )
@@ -190,7 +197,9 @@ class SQLiteRecipeRepository(RecipeRepository):
 
         return recipe
 
-    def _save_ingredients(self, recipe_id: int, ingredients: List[Ingredient]) -> None:
+    def _save_ingredients(
+        self, recipe_id: int, ingredients: List[Ingredient]
+    ) -> None:
         """Save ingredients for a recipe."""
         if not ingredients:
             return
@@ -266,6 +275,7 @@ class SQLiteRecipeRepository(RecipeRepository):
             servings=row["servings"],
             tags=tags,
             difficulty=row["difficulty"],
+            diet_type=row.get("diet_type"),
         )
 
     def _get_recipe_tags(self, recipe_id: int) -> List[str]:

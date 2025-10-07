@@ -5,8 +5,18 @@ Tests for database repositories.
 import os
 import tempfile
 
-from adapters.db import Database, SQLiteRecipeRepository, SQLiteShoppingListRepository
-from domain.entities import DietType, Ingredient, Recipe, ShoppingItem, ShoppingList
+from adapters.db import (
+    Database,
+    SQLiteRecipeRepository,
+    SQLiteShoppingListRepository,
+)
+from domain.entities import (
+    DietType,
+    Ingredient,
+    Recipe,
+    ShoppingItem,
+    ShoppingList,
+)
 
 
 class TestSQLiteRecipeRepository:
@@ -104,7 +114,9 @@ class TestSQLiteRecipeRepository:
         self.recipe_repo.save(recipe)
 
         # Search by diet type
-        low_carb_recipes = self.recipe_repo.search_by_diet_type(DietType.LOW_CARB)
+        low_carb_recipes = self.recipe_repo.search_by_diet_type(
+            DietType.LOW_CARB
+        )
         assert len(low_carb_recipes) == 1
         assert low_carb_recipes[0].title == "Low Carb Breakfast"
 

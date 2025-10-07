@@ -49,7 +49,9 @@ class SimpleRateLimiter:
 
         # Clean old requests
         self.requests[client_ip] = [
-            req_time for req_time in self.requests[client_ip] if req_time > minute_ago
+            req_time
+            for req_time in self.requests[client_ip]
+            if req_time > minute_ago
         ]
 
         return max(0, self.requests_per_minute - len(self.requests[client_ip]))
@@ -102,7 +104,9 @@ async def rate_limit_middleware(request: Request, call_next):
 
     # Add rate limit headers
     remaining = rate_limiter.get_remaining_requests(client_ip)
-    response.headers["X-RateLimit-Limit"] = str(rate_limiter.requests_per_minute)
+    response.headers["X-RateLimit-Limit"] = str(
+        rate_limiter.requests_per_minute
+    )
     response.headers["X-RateLimit-Remaining"] = str(remaining)
 
     return response

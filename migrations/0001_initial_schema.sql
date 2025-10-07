@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS recipes (
     cook_time_minutes INTEGER,
     servings INTEGER,
     difficulty TEXT,
+    diet_type TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

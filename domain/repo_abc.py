@@ -25,12 +25,16 @@ class RecipeRepository(ABC):
         pass
 
     @abstractmethod
-    def search_by_diet_type(self, diet_type: DietType, limit: int = 10) -> List[Recipe]:
+    def search_by_diet_type(
+        self, diet_type: DietType, limit: int = 10
+    ) -> List[Recipe]:
         """Search recipes by diet type."""
         pass
 
     @abstractmethod
-    def search_by_keywords(self, keywords: List[str], limit: int = 10) -> List[Recipe]:
+    def search_by_keywords(
+        self, keywords: List[str], limit: int = 10
+    ) -> List[Recipe]:
         """Search recipes by keywords in title or description."""
         pass
 
@@ -64,7 +68,9 @@ class ShoppingListRepository(ABC):
         pass
 
     @abstractmethod
-    def save(self, shopping_list: ShoppingList, thread_id: str) -> ShoppingList:
+    def save(
+        self, shopping_list: ShoppingList, thread_id: str
+    ) -> ShoppingList:
         """Save a shopping list for a specific thread."""
         pass
 

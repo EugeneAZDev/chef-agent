@@ -73,7 +73,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         # Log response
         response_info = (
-            f"{response.status_code} {response.headers.get('content-type', '')}"
+            f"{response.status_code} "
+            f"{response.headers.get('content-type', '')}"
         )
         print(f"🟢 {response_info}")
 
