@@ -5,22 +5,15 @@ Database connection and schema management.
 import sqlite3
 from typing import Optional
 
-# Import config here to avoid circular imports
-try:
-    from config import settings
-except ImportError:
-    # Fallback for when config is not available
-    class DefaultSettings:
-        sqlite_db = "chef_agent.db"
-
-    settings = DefaultSettings()
+# Default database path
+DEFAULT_DB_PATH = "chef_agent.db"
 
 
 class Database:
     """SQLite database connection and schema management."""
 
     def __init__(self, db_path: str = None):
-        self.db_path = db_path or settings.sqlite_db
+        self.db_path = db_path or DEFAULT_DB_PATH
         self._connection: Optional[sqlite3.Connection] = None
 
     def get_connection(self) -> sqlite3.Connection:

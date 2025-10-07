@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # AI/LLM settings
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     model_name: str = Field(default="llama-3.1-8b-instant", alias="MODEL_NAME")
+    groq_model_name: str = Field(
+        default="llama-3.1-8b-instant", alias="GROQ_MODEL_NAME"
+    )
     groq_base_url: str = Field(
         default="https://api.groq.com/openai/v1", alias="GROQ_BASE_URL"
     )
