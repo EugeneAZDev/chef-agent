@@ -1,6 +1,12 @@
 -- Initial database schema
 -- Migration: 0001_initial_schema
 
+-- Create migrations tracking table
+CREATE TABLE IF NOT EXISTS migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create recipes table
 CREATE TABLE IF NOT EXISTS recipes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -12,8 +18,10 @@ CREATE TABLE IF NOT EXISTS recipes (
     servings INTEGER,
     difficulty TEXT,
     diet_type TEXT,
+    user_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(title, user_id)
 );
 
 -- Create tags table
@@ -42,10 +50,12 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
 -- Create shopping lists table
 CREATE TABLE IF NOT EXISTS shopping_lists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    thread_id TEXT UNIQUE NOT NULL,
+    thread_id TEXT NOT NULL,
+    user_id TEXT,
     items JSON NOT NULL DEFAULT '[]',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(thread_id, user_id)
 );
 
 -- Create indexes for better performance
@@ -55,3 +65,15 @@ CREATE INDEX IF NOT EXISTS idx_shopping_lists_thread_id ON shopping_lists(thread
 CREATE INDEX IF NOT EXISTS idx_recipes_created_at ON recipes(created_at);
 CREATE INDEX IF NOT EXISTS idx_recipe_tags_recipe_id ON recipe_tags(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_recipe_tags_tag_id ON recipe_tags(tag_id);
+-- User-related indexes
+CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id);
+CREATE INDEX IF NOT EXISTS idx_recipes_title_user ON recipes(title, user_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_lists_user_id ON shopping_lists(user_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_lists_thread_user ON shopping_lists(thread_id, user_id);
+-- Additional indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_recipes_diet_type ON recipes(diet_type);
+CREATE INDEX IF NOT EXISTS idx_recipes_difficulty ON recipes(difficulty);
+CREATE INDEX IF NOT EXISTS idx_recipes_diet_difficulty ON recipes(diet_type, difficulty);
+CREATE INDEX IF NOT EXISTS idx_recipes_prep_time ON recipes(prep_time_minutes);
+CREATE INDEX IF NOT EXISTS idx_recipes_diet_type_user ON recipes(diet_type, user_id);
+CREATE INDEX IF NOT EXISTS idx_recipes_difficulty_user ON recipes(difficulty, user_id);
