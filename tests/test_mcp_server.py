@@ -7,42 +7,29 @@ from unittest.mock import patch
 import pytest
 from mcp.types import TextContent
 
-from adapters.db import SQLiteRecipeRepository, SQLiteShoppingListRepository
 from adapters.mcp.client import ChefAgentMCPClient
 from adapters.mcp.server import ChefAgentMCPServer
 from domain.entities import Ingredient, Recipe, ShoppingItem, ShoppingList
+from tests.base_test import BaseDatabaseTest
 
 
-class TestChefAgentMCPServer:
+class TestChefAgentMCPServer(BaseDatabaseTest):
     """Test cases for ChefAgentMCPServer."""
-
-    @classmethod
-    def setup_class(cls):
-        """Set up test fixtures for the entire class."""
-        # Use in-memory database for tests
-        from adapters.db import Database
-
-        cls.test_db = Database(":memory:")
-
-        # Create MCP server with test database
-        cls.server = ChefAgentMCPServer()
-        # Replace the database and repositories
-        cls.server.db = cls.test_db
-        cls.server.recipe_repo = SQLiteRecipeRepository(cls.test_db)
-        cls.server.shopping_repo = SQLiteShoppingListRepository(cls.test_db)
-
-        # Also update the db reference in repositories
-        cls.server.recipe_repo.db = cls.test_db
-        cls.server.shopping_repo.db = cls.test_db
 
     def setup_method(self):
         """Set up test fixtures for each test method."""
-        # Clear the database before each test
-        self.test_db.execute_update("DELETE FROM shopping_lists")
-        self.test_db.execute_update("DELETE FROM recipes")
-        self.test_db.execute_update("DELETE FROM tags")
-        self.test_db.execute_update("DELETE FROM recipe_tags")
-        self.test_db.execute_update("DELETE FROM recipe_ingredients")
+        super().setup_method()
+
+        # Create MCP server with test database
+        self.server = ChefAgentMCPServer()
+        # Replace the database and repositories
+        self.server.db = self.db
+        self.server.recipe_repo = self.recipe_repo
+        self.server.shopping_repo = self.shopping_repo
+
+        # Also update the db reference in repositories
+        self.server.recipe_repo.db = self.db
+        self.server.shopping_repo.db = self.db
 
     @pytest.mark.asyncio
     async def test_recipe_finder_basic_search(self):
@@ -63,11 +50,12 @@ class TestChefAgentMCPServer:
                 Ingredient(name="pasta", quantity="500g", unit="g"),
                 Ingredient(name="tomato sauce", quantity="400ml", unit="ml"),
             ],
+            user_id=self.test_user_id,
         )
 
         with patch.object(
             self.server.recipe_repo,
-            "search_by_keywords",
+            "search_recipes",
             return_value=[mock_recipe],
         ):
             result = await self.server._handle_recipe_finder(
@@ -94,11 +82,12 @@ class TestChefAgentMCPServer:
             tags=["quick", "pasta"],
             diet_type="vegetarian",
             ingredients=[],
+            user_id=self.test_user_id,
         )
 
         with patch.object(
             self.server.recipe_repo,
-            "search_by_keywords",
+            "search_recipes",
             return_value=[mock_recipe],
         ):
             result = await self.server._handle_recipe_finder(
@@ -117,7 +106,7 @@ class TestChefAgentMCPServer:
     async def test_shopping_list_create(self):
         """Test shopping list creation."""
         with patch.object(self.server.shopping_repo, "create") as mock_create:
-            mock_list = ShoppingList(items=[])
+            mock_list = ShoppingList(items=[], user_id=self.test_user_id)
             mock_list.id = 1
             mock_create.return_value = mock_list
 
@@ -133,7 +122,7 @@ class TestChefAgentMCPServer:
     async def test_shopping_list_add_items(self):
         """Test adding items to shopping list."""
         # Mock existing shopping list
-        mock_list = ShoppingList(items=[])
+        mock_list = ShoppingList(items=[], user_id=self.test_user_id)
         mock_list.id = 1
 
         with (

@@ -1,81 +1,98 @@
 """
-Security middleware for Chef Agent API.
+Middleware for Chef Agent API.
+
+This module provides security headers, logging, and other middleware
+for the Chef Agent API.
 """
 
-import re
+import logging
+import time
+from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+logger = logging.getLogger(__name__)
 
-def scrub_sensitive_data(content: str) -> str:
-    """Scrub sensitive data from logs."""
-    # Scrub API keys
-    content = re.sub(r"gsk_[a-zA-Z0-9]{48}", "[GROQ-KEY]", content)
-    content = re.sub(r"sk-[a-zA-Z0-9]{48}", "[OPENAI-KEY]", content)
 
-    # Scrub other sensitive patterns
-    content = re.sub(r"\b\d{10,}\b", "[ID]", content)
-    content = re.sub(
-        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", "[EMAIL]", content
-    )
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware for request/response logging."""
 
-    return content
+    async def dispatch(
+        self, request: Request, call_next: Callable
+    ) -> Response:
+        """Log request and response details."""
+        start_time = time.time()
+
+        # Log request
+        logger.info(
+            f"Request: {request.method} {request.url.path} "
+            f"from {request.client.host}"
+        )
+
+        # Process request
+        response = await call_next(request)
+
+        # Calculate processing time
+        process_time = time.time() - start_time
+
+        # Log response
+        logger.info(
+            f"Response: {response.status_code} " f"in {process_time:.3f}s"
+        )
+
+        # Add processing time header
+        response.headers["X-Process-Time"] = str(process_time)
+
+        return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add security headers to all responses."""
+    """Middleware for adding security headers."""
 
-    async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
+    async def dispatch(
+        self, request: Request, call_next: Callable
+    ) -> Response:
+        """Add security headers to response."""
+        response = await call_next(request)
+
+        # CORS headers
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = (
+            "GET, POST, PUT, DELETE, OPTIONS"
+        )
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization"
+        )
+        response.headers["Access-Control-Max-Age"] = "86400"
 
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "0"
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
-
-        # Content Security Policy
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'"
-        )
-
-        # Additional security headers
+        response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
             "geolocation=(), microphone=(), camera=()"
         )
 
-        return response
-
-
-class LoggingMiddleware(BaseHTTPMiddleware):
-    """Log requests and responses with sensitive data scrubbing."""
-
-    async def dispatch(self, request: Request, call_next):
-        # Log request
-        request_info = f"{request.method} {request.url.path}"
-        if request.query_params:
-            request_info += f"?{request.query_params}"
-
-        print(f"🔵 {request_info}")
-
-        response: Response = await call_next(request)
-
-        # Log response
-        response_info = (
-            f"{response.status_code} "
-            f"{response.headers.get('content-type', '')}"
+        # Content Security Policy
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self'; "
+            "font-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
         )
-        print(f"🟢 {response_info}")
+        response.headers["Content-Security-Policy"] = csp
+
+        # HSTS (only for HTTPS)
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
         return response

@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from adapters.db.database import Database
+from adapters.db import Database
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,9 @@ async def health_check() -> Dict[str, Any]:
     "/detailed",
     response_model=Dict[str, Any],
     summary="Detailed health check",
-    description="Comprehensive health check including database and dependencies",
+    description=(
+        "Comprehensive health check including database and dependencies"
+    ),
 )
 async def detailed_health_check() -> Dict[str, Any]:
     """

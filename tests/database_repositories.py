@@ -2,14 +2,6 @@
 Tests for database repositories.
 """
 
-import os
-import tempfile
-
-from adapters.db import (
-    Database,
-    SQLiteRecipeRepository,
-    SQLiteShoppingListRepository,
-)
 from domain.entities import (
     DietType,
     Ingredient,
@@ -17,23 +9,11 @@ from domain.entities import (
     ShoppingItem,
     ShoppingList,
 )
+from tests.base_test import BaseDatabaseTest
 
 
-class TestSQLiteRecipeRepository:
+class TestSQLiteRecipeRepository(BaseDatabaseTest):
     """Test SQLiteRecipeRepository."""
-
-    def setup_method(self):
-        """Set up test database."""
-        self.temp_db = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
-        self.temp_db.close()
-
-        self.db = Database(self.temp_db.name)
-        self.recipe_repo = SQLiteRecipeRepository(self.db)
-
-    def teardown_method(self):
-        """Clean up test database."""
-        self.db.close()
-        os.unlink(self.temp_db.name)
 
     def test_create_and_get_recipe(self):
         """Test creating and retrieving a recipe."""
@@ -52,6 +32,7 @@ class TestSQLiteRecipeRepository:
             prep_time_minutes=10,
             cook_time_minutes=15,
             tags=["breakfast", "easy"],
+            user_id=self.test_user_id,
         )
 
         # Save recipe
@@ -144,6 +125,7 @@ class TestSQLiteRecipeRepository:
             title="Test Recipe",
             ingredients=[],
             instructions="Test instructions",
+            user_id=self.test_user_id,
         )
 
         saved_recipe = self.recipe_repo.save(recipe)
@@ -160,21 +142,8 @@ class TestSQLiteRecipeRepository:
         assert self.recipe_repo.get_by_id(recipe_id) is None
 
 
-class TestSQLiteShoppingListRepository:
+class TestSQLiteShoppingListRepository(BaseDatabaseTest):
     """Test SQLiteShoppingListRepository."""
-
-    def setup_method(self):
-        """Set up test database."""
-        self.temp_db = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
-        self.temp_db.close()
-
-        self.db = Database(self.temp_db.name)
-        self.shopping_repo = SQLiteShoppingListRepository(self.db)
-
-    def teardown_method(self):
-        """Clean up test database."""
-        self.db.close()
-        os.unlink(self.temp_db.name)
 
     def test_create_and_get_shopping_list(self):
         """Test creating and retrieving a shopping list."""
@@ -184,7 +153,7 @@ class TestSQLiteShoppingListRepository:
             ShoppingItem(name="bread", quantity="2", unit="loaves"),
         ]
 
-        shopping_list = ShoppingList(items=items)
+        shopping_list = ShoppingList(items=items, user_id=self.test_user_id)
         thread_id = "test_thread_123"
 
         # Save shopping list
@@ -232,7 +201,7 @@ class TestSQLiteShoppingListRepository:
             ShoppingItem(name="milk", quantity="1", unit="liter"),
             ShoppingItem(name="bread", quantity="2", unit="loaves"),
         ]
-        shopping_list = ShoppingList(items=items)
+        shopping_list = ShoppingList(items=items, user_id=self.test_user_id)
         self.shopping_repo.save(shopping_list, thread_id)
 
         # Verify list has items
@@ -251,7 +220,7 @@ class TestSQLiteShoppingListRepository:
 
         # Create and save list
         items = [ShoppingItem(name="milk", quantity="1", unit="liter")]
-        shopping_list = ShoppingList(items=items)
+        shopping_list = ShoppingList(items=items, user_id=self.test_user_id)
         saved_list = self.shopping_repo.save(shopping_list, thread_id)
         list_id = saved_list.id
 
