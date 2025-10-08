@@ -25,6 +25,12 @@ class OpenAIAdapter(BaseLLM):
     ):
         """Initialize OpenAI adapter."""
         super().__init__(api_key, model, **kwargs)
+
+        if not 0.0 <= temperature <= 2.0:
+            raise ValueError("Temperature must be between 0.0 and 2.0")
+        if max_tokens <= 0:
+            raise ValueError("Max tokens must be positive")
+
         self.temperature = temperature
         self.max_tokens = max_tokens
 

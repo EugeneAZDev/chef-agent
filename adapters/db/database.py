@@ -3,6 +3,7 @@ Database connection and schema management.
 """
 
 import sqlite3
+import threading
 from typing import Optional
 
 # Default database path
@@ -15,107 +16,45 @@ class Database:
     def __init__(self, db_path: str = None):
         self.db_path = db_path or DEFAULT_DB_PATH
         self._connection: Optional[sqlite3.Connection] = None
+        self._local = threading.local()
+        self._run_migrations()
 
     def get_connection(self) -> sqlite3.Connection:
         """Get database connection, creating it if necessary."""
-        if self._connection is None:
-            self._connection = sqlite3.connect(
+        # Use thread-local storage for thread safety
+        if (
+            not hasattr(self._local, "connection")
+            or self._local.connection is None
+        ):
+            self._local.connection = sqlite3.connect(
                 self.db_path, check_same_thread=False
             )
-            self._connection.row_factory = sqlite3.Row
-            self._create_schema()
-        return self._connection
+            self._local.connection.row_factory = sqlite3.Row
+            # Enable WAL mode for better concurrency
+            self._local.connection.execute("PRAGMA journal_mode=WAL")
+            # Set busy timeout for better handling of concurrent access
+            self._local.connection.execute("PRAGMA busy_timeout = 10000")
+            # Enable foreign key constraints
+            self._local.connection.execute("PRAGMA foreign_keys = ON")
+        return self._local.connection
 
     def close(self) -> None:
         """Close database connection."""
-        if self._connection:
-            self._connection.close()
-            self._connection = None
+        if hasattr(self._local, "connection") and self._local.connection:
+            self._local.connection.close()
+            self._local.connection = None
 
-    def _create_schema(self) -> None:
-        """Create database schema if it doesn't exist."""
-        conn = self.get_connection()
+    def _run_migrations(self) -> None:
+        """Run database migrations."""
+        try:
+            # Import here to avoid circular import
+            from .migrations import MigrationRunner
 
-        # Create recipes table
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS recipes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                description TEXT,
-                instructions TEXT NOT NULL DEFAULT '',
-                prep_time_minutes INTEGER,
-                cook_time_minutes INTEGER,
-                servings INTEGER,
-                difficulty TEXT,
-                diet_type TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """
-        )
-
-        # Create tags table
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS tags (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            )
-        """
-        )
-
-        # Create recipe_tags junction table
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS recipe_tags (
-                recipe_id INTEGER,
-                tag_id INTEGER,
-                PRIMARY KEY (recipe_id, tag_id),
-                FOREIGN KEY (recipe_id) REFERENCES recipes(id)
-                ON DELETE CASCADE,
-                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-            )
-        """
-        )
-
-        # Create ingredients table (stored as JSON)
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS recipe_ingredients (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                recipe_id INTEGER,
-                ingredients JSON NOT NULL,
-                FOREIGN KEY (recipe_id) REFERENCES recipes(id)
-                ON DELETE CASCADE
-            )
-        """
-        )
-
-        # Create shopping lists table
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS shopping_lists (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                thread_id TEXT UNIQUE NOT NULL,
-                items JSON NOT NULL DEFAULT '[]',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """
-        )
-
-        # Create indexes for better performance
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title)"
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)")
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_shopping_lists_thread_id "
-            "ON shopping_lists(thread_id)"
-        )
-
-        conn.commit()
+            migration_runner = MigrationRunner(self)
+            migration_runner.run_migrations()
+        except Exception as e:
+            print(f"Error running migrations: {e}")
+            raise e
 
     def execute_query(self, query: str, params: tuple = ()) -> list:
         """Execute a SELECT query and return results."""

@@ -3,6 +3,8 @@ SQLite implementation of RecipeRepository.
 """
 
 import json
+import sqlite3
+import threading
 from typing import List, Optional
 
 from domain.entities import DietType, Ingredient, Recipe
@@ -16,6 +18,7 @@ class SQLiteRecipeRepository(RecipeRepository):
 
     def __init__(self, db: Database):
         self.db = db
+        self._lock = threading.RLock()  # Reentrant lock for thread safety
 
     def get_by_id(self, recipe_id: int) -> Optional[Recipe]:
         """Get a recipe by its ID."""
@@ -87,65 +90,137 @@ class SQLiteRecipeRepository(RecipeRepository):
         rows = self.db.execute_query(query, params)
         return [self._row_to_recipe(row) for row in rows]
 
-    def get_all(self, limit: int = 100) -> List[Recipe]:
-        """Get all recipes with a limit."""
-        query = """
-            SELECT r.*, ri.ingredients
-            FROM recipes r
-            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
-            ORDER BY r.created_at DESC
-            LIMIT ?
-        """
-        rows = self.db.execute_query(query, (limit,))
+    def get_all(self, limit: int = 100, user_id: str = None) -> List[Recipe]:
+        """Get all recipes with a limit, optionally filtered by user."""
+        if user_id:
+            query = """
+                SELECT r.*, ri.ingredients
+                FROM recipes r
+                LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+                WHERE r.user_id = ?
+                ORDER BY r.created_at DESC
+                LIMIT ?
+            """
+            rows = self.db.execute_query(query, (user_id, limit))
+        else:
+            query = """
+                SELECT r.*, ri.ingredients
+                FROM recipes r
+                LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+                ORDER BY r.created_at DESC
+                LIMIT ?
+            """
+            rows = self.db.execute_query(query, (limit,))
         return [self._row_to_recipe(row) for row in rows]
 
     def save(self, recipe: Recipe) -> Recipe:
-        """Save a recipe (create or update)."""
-        if recipe.id is None or recipe.id == 0:
-            return self._create_recipe(recipe)
-        else:
-            return self._update_recipe(recipe)
+        """Save a recipe (create or update) with thread safety."""
+        with self._lock:  # Ensure thread safety
+            try:
+                self.db.begin_transaction()
+                if recipe.id is None:
+                    result = self._create_recipe(recipe)
+                else:
+                    result = self._update_recipe(recipe)
+                self.db.commit_transaction()
+                return result
+            except sqlite3.IntegrityError as e:
+                self.db.rollback_transaction()
+                if "UNIQUE constraint failed" in str(e):
+                    raise ValueError(
+                        f"Recipe with title '{recipe.title}' already exists "
+                        f"for this user"
+                    )
+                raise
+            except Exception as e:
+                self.db.rollback_transaction()
+                raise e
 
     def delete(self, recipe_id: int) -> bool:
         """Delete a recipe by ID."""
-        # Delete from recipe_tags first (due to foreign key constraints)
-        self.db.execute_update(
-            "DELETE FROM recipe_tags WHERE recipe_id = ?", (recipe_id,)
-        )
+        try:
+            self.db.begin_transaction()
+            # Delete from recipe_tags first (due to foreign key constraints)
+            self.db.execute_update(
+                "DELETE FROM recipe_tags WHERE recipe_id = ?", (recipe_id,)
+            )
 
-        # Delete ingredients
-        self.db.execute_update(
-            "DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,)
-        )
+            # Delete ingredients
+            self.db.execute_update(
+                "DELETE FROM recipe_ingredients WHERE recipe_id = ?",
+                (recipe_id,),
+            )
 
-        # Delete recipe
-        affected_rows = self.db.execute_update(
-            "DELETE FROM recipes WHERE id = ?", (recipe_id,)
-        )
+            # Delete recipe
+            affected_rows = self.db.execute_update(
+                "DELETE FROM recipes WHERE id = ?", (recipe_id,)
+            )
+            self.db.commit_transaction()
+            return affected_rows > 0
+        except Exception as e:
+            self.db.rollback_transaction()
+            raise e
 
-        return affected_rows > 0
+    def search_recipes(
+        self,
+        query: str = None,
+        diet_type: str = None,
+        difficulty: str = None,
+        max_prep_time: int = None,
+        limit: int = 10,
+        user_id: str = None,
+    ) -> List[Recipe]:
+        """Search recipes with various filters."""
+        # For now, implement a simple search that returns all recipes
+        # This can be enhanced later with proper search logic
+        return self.get_all(limit, user_id)
 
     def _create_recipe(self, recipe: Recipe) -> Recipe:
-        """Create a new recipe."""
-        # Insert recipe
-        query = """
-            INSERT INTO recipes (title, description, instructions, prep_time_minutes,
-                               cook_time_minutes, servings, difficulty, diet_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """Create a new recipe atomically with proper locking."""
+        # Check for existing recipe to prevent race conditions
+        existing_query = """
+            SELECT id FROM recipes
+            WHERE title = ? AND user_id = ?
         """
-        recipe_id = self.db.execute_insert(
-            query,
-            (
-                recipe.title,
-                recipe.description,
-                recipe.instructions,
-                recipe.prep_time_minutes,
-                recipe.cook_time_minutes,
-                recipe.servings,
-                recipe.difficulty,
-                recipe.diet_type,
-            ),
+        existing = self.db.execute_query(
+            existing_query, (recipe.title, recipe.user_id)
         )
+        if existing:
+            raise ValueError(
+                f"Recipe with title '{recipe.title}' already exists "
+                f"for this user"
+            )
+
+        # Insert new recipe
+        query = """
+            INSERT INTO recipes (
+                title, description, instructions, prep_time_minutes,
+                cook_time_minutes, servings, difficulty, diet_type, user_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        try:
+            recipe_id = self.db.execute_insert(
+                query,
+                (
+                    recipe.title,
+                    recipe.description,
+                    recipe.instructions,
+                    recipe.prep_time_minutes,
+                    recipe.cook_time_minutes,
+                    recipe.servings,
+                    recipe.difficulty,
+                    recipe.diet_type,
+                    recipe.user_id,
+                ),
+            )
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e):
+                raise ValueError(
+                    f"Recipe with title '{recipe.title}' already exists "
+                    f"for this user"
+                )
+            raise
 
         # Insert ingredients
         self._save_ingredients(recipe_id, recipe.ingredients)
@@ -164,7 +239,7 @@ class SQLiteRecipeRepository(RecipeRepository):
             UPDATE recipes
             SET title = ?, description = ?, instructions = ?,
                 prep_time_minutes = ?, cook_time_minutes = ?,
-                servings = ?, difficulty = ?, diet_type = ?,
+                servings = ?, difficulty = ?, diet_type = ?, user_id = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """
@@ -179,6 +254,7 @@ class SQLiteRecipeRepository(RecipeRepository):
                 recipe.servings,
                 recipe.difficulty,
                 recipe.diet_type,
+                recipe.user_id,
                 recipe.id,
             ),
         )
@@ -213,9 +289,15 @@ class SQLiteRecipeRepository(RecipeRepository):
             for ing in ingredients
         ]
 
+        try:
+            ingredients_json = json.dumps(ingredients_data)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Failed to serialize ingredients: {e}")
+
         self.db.execute_insert(
-            "INSERT INTO recipe_ingredients (recipe_id, ingredients) VALUES (?, ?)",
-            (recipe_id, json.dumps(ingredients_data)),
+            "INSERT INTO recipe_ingredients (recipe_id, ingredients) "
+            "VALUES (?, ?)",
+            (recipe_id, ingredients_json),
         )
 
     def _save_tags(self, recipe_id: int, tags: List[str]) -> None:
@@ -239,7 +321,8 @@ class SQLiteRecipeRepository(RecipeRepository):
 
             # Link recipe to tag
             self.db.execute_insert(
-                "INSERT OR IGNORE INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO recipe_tags (recipe_id, tag_id) "
+                "VALUES (?, ?)",
                 (recipe_id, tag_id),
             )
 
@@ -249,7 +332,7 @@ class SQLiteRecipeRepository(RecipeRepository):
         ingredients = []
         if row["ingredients"]:
             try:
-                ingredients_data = json.loads(row["ingredients"])
+                ingredients_data = json.loads(row["ingredients"] or "[]")
                 ingredients = [
                     Ingredient(
                         name=ing["name"],
@@ -275,7 +358,8 @@ class SQLiteRecipeRepository(RecipeRepository):
             servings=row["servings"],
             tags=tags,
             difficulty=row["difficulty"],
-            diet_type=row.get("diet_type"),
+            diet_type=row["diet_type"] if "diet_type" in row else None,
+            user_id=row["user_id"] if "user_id" in row else None,
         )
 
     def _get_recipe_tags(self, recipe_id: int) -> List[str]:

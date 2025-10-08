@@ -77,31 +77,17 @@ class ChefAgentGraph:
     async def _planner_node(self, state: AgentState) -> AgentState:
         """Plan the agent's actions based on user input."""
         try:
-            # Extract information from user message
-            user_message = (
-                state.messages[-1]["content"] if state.messages else ""
-            )
-
-            # Create system prompt
-            system_prompt = self._create_system_prompt(state.language)
+            # Extract user input
+            user_message = self._extract_user_input(state)
 
             # Prepare messages for LLM
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_message),
-            ]
+            messages = self._prepare_llm_messages(user_message, state.language)
 
-            # Get LLM response with tool calls
-            response = await self.llm_with_tools.ainvoke(messages)
+            # Call LLM
+            response = await self._call_llm(messages)
 
-            # Update state
-            state.messages.append(
-                {"role": "assistant", "content": response.content}
-            )
-
-            # Extract tool calls if any
-            if hasattr(response, "tool_calls") and response.tool_calls:
-                state.tool_calls = response.tool_calls
+            # Update state with LLM response
+            self._update_state_from_llm(state, response)
 
             return state
 
@@ -109,30 +95,68 @@ class ChefAgentGraph:
             state.error = f"Planning error: {str(e)}"
             return state
 
+    def _extract_user_input(self, state: AgentState) -> str:
+        """Extract user message from state."""
+        return state.messages[-1]["content"] if state.messages else ""
+
+    def _prepare_llm_messages(self, user_message: str, language: str) -> list:
+        """Prepare messages for LLM including system prompt."""
+        system_prompt = self._create_system_prompt(language)
+
+        return [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_message),
+        ]
+
+    async def _call_llm(self, messages: list) -> Any:
+        """Call LLM with prepared messages."""
+        return await self.llm_with_tools.ainvoke(messages)
+
+    def _update_state_from_llm(self, state: AgentState, response: Any) -> None:
+        """Update state with LLM response and extract tool calls."""
+        # Add assistant message to state
+        state.messages.append(
+            {"role": "assistant", "content": response.content}
+        )
+
+        # Extract tool calls if any - replace instead of append to avoid
+        # duplication
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            state.tool_calls = response.tool_calls
+
     async def _tools_node(self, state: AgentState) -> AgentState:
         """Execute tool calls."""
-        try:
-            if not getattr(state, "tool_calls", None):
-                return state
+        if not getattr(state, "tool_calls", None):
+            return state
 
-            # Execute tool calls
-            tool_results = []
-            for tool_call in state.tool_calls:
-                tool_name = tool_call.get("name")
-                tool_args = tool_call.get("args", {})
+        # Execute tool calls
+        tool_results = []
+        for tool_call in state.tool_calls:
+            tool_name = tool_call.get("name")
+            tool_args = tool_call.get("args", {})
 
+            try:
                 # Find and execute the tool
                 tool_result = await self._execute_tool(tool_name, tool_args)
                 tool_results.append(tool_result)
+            except Exception as e:
+                # Log the error and add it to results
+                error_result = {
+                    "tool_name": tool_name,
+                    "success": False,
+                    "error": str(e),
+                    "result": None,
+                }
+                tool_results.append(error_result)
 
-            # Update state with tool results
-            state.tool_results = tool_results
+                # Set error state to stop execution
+                state.error = f"Tool '{tool_name}' execution failed: {str(e)}"
+                state.tool_results = tool_results
+                return state
 
-            return state
-
-        except Exception as e:
-            state.error = f"Tool execution error: {str(e)}"
-            return state
+        # Update state with tool results
+        state.tool_results = tool_results
+        return state
 
     async def _responder_node(self, state: AgentState) -> AgentState:
         """Generate final response based on tool results."""
@@ -188,8 +212,8 @@ class ChefAgentGraph:
 
             # Default response
             return (
-                "I'm here to help you plan your meals! Please tell me about your "
-                "dietary goals and how many days you'd like to plan for."
+                "I'm here to help you plan your meals! Please tell me about "
+                "your dietary goals and how many days you'd like to plan for."
             )
 
         except Exception as e:
@@ -227,7 +251,8 @@ class ChefAgentGraph:
                         shopping_list = tool_result["shopping_list"]
                         if "items" in shopping_list and shopping_list["items"]:
                             response_parts.append(
-                                f"I've added {len(shopping_list['items'])} items "
+                                f"I've added "
+                                f"{len(shopping_list['items'])} items "
                                 f"to your shopping list."
                             )
                         else:
@@ -268,12 +293,8 @@ class ChefAgentGraph:
                 language=request.language,
             )
 
-            # Add user message to memory
-            await self.memory_manager.add_user_message(
-                request.thread_id, request.message
-            )
-
-            # Process through the graph
+            # Process through the graph (LangGraph handles memory via
+            # checkpointer)
             config = {"thread_id": request.thread_id}
             final_state = await self.graph.ainvoke(
                 initial_state, config=config
@@ -284,11 +305,6 @@ class ChefAgentGraph:
                 final_state.messages[-1]["content"]
                 if final_state.messages
                 else "I apologize, but I couldn't process your request."
-            )
-
-            # Add assistant message to memory
-            await self.memory_manager.add_assistant_message(
-                request.thread_id, response_message
             )
 
             # Create response

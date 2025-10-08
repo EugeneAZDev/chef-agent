@@ -24,6 +24,13 @@ class GroqAdapter(BaseLLM):
         **kwargs,
     ):
         """Initialize Groq adapter."""
+        if not api_key:
+            raise ValueError("API key cannot be empty")
+        if not (0.0 <= temperature <= 2.0):
+            raise ValueError("Temperature must be between 0.0 and 2.0")
+        if max_tokens <= 0:
+            raise ValueError("Max tokens must be positive")
+
         super().__init__(api_key, model, **kwargs)
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -49,6 +56,10 @@ class GroqAdapter(BaseLLM):
 
     def invoke(self, messages: List[BaseMessage], **kwargs) -> Any:
         """Invoke Groq LLM synchronously."""
+        if not messages:
+            raise ValueError("Messages list cannot be empty")
+        if messages is None:
+            raise ValueError("Messages cannot be None")
         return self.llm.invoke(messages, **kwargs)
 
     def bind_tools(self, tools: List[Any]) -> ChatGroq:

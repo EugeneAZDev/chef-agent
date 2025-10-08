@@ -26,6 +26,11 @@ class BaseLLM(ABC):
 
     def __init__(self, api_key: str, model: str, **kwargs):
         """Initialize the LLM adapter."""
+        if not api_key:
+            raise ValueError("API key cannot be empty")
+        if not model:
+            raise ValueError("Model cannot be empty")
+
         self.api_key = api_key
         self.model = model
         self.kwargs = kwargs

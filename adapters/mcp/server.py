@@ -182,23 +182,19 @@ class ChefAgentMCPServer:
         max_cook_time = args.get("max_cook_time")
         servings = args.get("servings")
 
-        # Search recipes
-        recipes = self.recipe_repo.search_by_keywords(query)
+        # Search recipes using the proper search method with filters
+        recipes = self.recipe_repo.search_recipes(
+            query=query,
+            diet_type=diet_type,
+            difficulty=None,  # Not used in MCP interface
+            max_prep_time=max_prep_time,
+            limit=50,  # Reasonable limit for MCP
+        )
 
-        # Apply filters
+        # Apply additional filters that aren't handled by search_recipes
         if tags:
             recipes = [
                 r for r in recipes if any(tag in r.tags for tag in tags)
-            ]
-
-        if diet_type:
-            recipes = [r for r in recipes if r.diet_type == diet_type]
-
-        if max_prep_time is not None:
-            recipes = [
-                r
-                for r in recipes
-                if r.prep_time_minutes and r.prep_time_minutes <= max_prep_time
             ]
 
         if max_cook_time is not None:
@@ -300,16 +296,26 @@ class ChefAgentMCPServer:
                     shopping_list, thread_id
                 )
 
-            # Convert items to ShoppingItem objects
-            new_items = [
-                ShoppingItem(
-                    name=item["name"],
-                    quantity=item.get("quantity", "1"),
-                    unit=item.get("unit", ""),
-                    category=item.get("category", "other"),
+            # Convert items to ShoppingItem objects with auto-categorization
+            from domain.ingredient_categorizer import IngredientCategorizer
+
+            new_items = []
+            for item in items:
+                # Use provided category or auto-detect
+                category = item.get("category")
+                if not category:
+                    category = IngredientCategorizer.categorize_ingredient(
+                        item["name"]
+                    )
+
+                new_items.append(
+                    ShoppingItem(
+                        name=item["name"],
+                        quantity=item.get("quantity", "1"),
+                        unit=item.get("unit", ""),
+                        category=category,
+                    )
                 )
-                for item in items
-            ]
 
             # Add items to existing list
             for item in new_items:
@@ -332,7 +338,7 @@ class ChefAgentMCPServer:
             return {
                 "action": "cleared",
                 "thread_id": thread_id,
-                "message": ("Shopping list cleared"),
+                "message": "Shopping list cleared",
             }
 
         elif action == "delete":

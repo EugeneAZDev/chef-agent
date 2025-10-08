@@ -1,8 +1,8 @@
 """
 Domain entities for the Chef Agent application.
 
-These classes represent the core business concepts and contain only business logic.
-They are independent of external technologies (database, API, etc.).
+These classes represent the core business concepts and contain only business
+logic. They are independent of external technologies (database, API, etc.).
 """
 
 from __future__ import annotations
@@ -120,7 +120,8 @@ class ShoppingList:
     def add_ingredients(
         self, ingredients: List[Ingredient], category: Optional[str] = None
     ) -> None:
-        """Add multiple ingredients as shopping items with automatic categorization."""
+        """Add multiple ingredients as shopping items with automatic
+        categorization."""
         for ingredient in ingredients:
             # Use provided category or auto-detect if not provided
             detected_category = (

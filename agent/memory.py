@@ -33,6 +33,8 @@ class SQLiteMemorySaver(BaseCheckpointSaver):
                 self.db_path, check_same_thread=False
             )
             self._connection.row_factory = sqlite3.Row
+            # Set busy timeout to handle concurrent access
+            self._connection.execute("PRAGMA busy_timeout = 5000;")
         return self._connection
 
     def _create_schema(self) -> None:
@@ -68,10 +70,12 @@ class SQLiteMemorySaver(BaseCheckpointSaver):
 
         # Create indexes
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)"
+            "CREATE INDEX IF NOT EXISTS idx_messages_thread_id "
+            "ON messages(thread_id)"
         )
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)"
+            "CREATE INDEX IF NOT EXISTS idx_messages_timestamp "
+            "ON messages(timestamp)"
         )
 
         conn.commit()
@@ -112,7 +116,9 @@ class SQLiteMemorySaver(BaseCheckpointSaver):
 
             conn.execute(
                 """
-                INSERT OR REPLACE INTO conversations (thread_id, state_data, updated_at)
+                INSERT OR REPLACE INTO conversations (
+                    thread_id, state_data, updated_at
+                )
                 VALUES (?, ?, CURRENT_TIMESTAMP)
             """,
                 (thread_id, state_data),
@@ -204,6 +210,33 @@ class SQLiteMemorySaver(BaseCheckpointSaver):
                 }
 
             return None
+
+    def get_all_threads(self) -> List[Dict[str, Any]]:
+        """Get all conversation threads."""
+        conn = self._get_connection()
+        cursor = conn.execute(
+            """
+            SELECT c.thread_id, c.created_at, c.updated_at,
+                   COUNT(m.id) as message_count
+            FROM conversations c
+            LEFT JOIN messages m ON c.thread_id = m.thread_id
+            GROUP BY c.thread_id, c.created_at, c.updated_at
+            ORDER BY c.updated_at DESC
+        """
+        )
+
+        threads = []
+        for row in cursor.fetchall():
+            threads.append(
+                {
+                    "thread_id": row["thread_id"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                    "message_count": row["message_count"],
+                }
+            )
+
+        return threads
 
     def close(self) -> None:
         """Close database connection."""

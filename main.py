@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from adapters.db import Database
+from api import chat_router, health_router, recipes_router, shopping_router
 from api.limiter import rate_limit_middleware
 from api.middleware import LoggingMiddleware, SecurityHeadersMiddleware
 
@@ -26,8 +27,22 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup on shutdown
-    db.close()
+    # Cleanup on shutdown - close MCP clients first, then database
+    try:
+        # Close any active MCP connections
+        from api.chat import _agent
+
+        if _agent and hasattr(_agent, "mcp_client"):
+            await _agent.mcp_client.disconnect()
+    except Exception as e:
+        print(f"Error closing MCP client: {e}")
+
+    # Close database connections
+    try:
+        db.close()
+    except Exception as e:
+        print(f"Error closing database: {e}")
+
     print("Chef Agent API stopped")
 
 
@@ -57,11 +72,11 @@ app.add_middleware(LoggingMiddleware)
 # Add rate limiting
 app.middleware("http")(rate_limit_middleware)
 
-
-@app.get("/health")
-def health_check():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "Chef Agent API", "version": "1.0.0"}
+# Include API routers
+app.include_router(chat_router)
+app.include_router(health_router)
+app.include_router(recipes_router)
+app.include_router(shopping_router)
 
 
 @app.get("/")
@@ -71,7 +86,10 @@ def read_root():
         "message": "Chef Agent API",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/health",
+        "health": "/api/v1/health/",
+        "chat": "/api/v1/chat/",
+        "recipes": "/api/v1/recipes/",
+        "shopping": "/api/v1/shopping/",
     }
 
 

@@ -16,9 +16,10 @@ from mcp.client.stdio import stdio_client
 class ChefAgentMCPClient:
     """Client for Chef Agent MCP server."""
 
-    def __init__(self):
+    def __init__(self, timeout: int = 30):
         """Initialize the MCP client."""
         self.session: Optional[ClientSession] = None
+        self.timeout = timeout
 
     async def connect(self):
         """Connect to the MCP server."""
@@ -58,8 +59,16 @@ class ChefAgentMCPClient:
         if servings is not None:
             arguments["servings"] = servings
 
-        result = await self.session.call_tool("recipe_finder", arguments)
-        return json.loads(result[0].text)
+        try:
+            result = await asyncio.wait_for(
+                self.session.call_tool("recipe_finder", arguments),
+                timeout=self.timeout,
+            )
+            return json.loads(result[0].text)
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"Recipe search timed out after {self.timeout} seconds"
+            )
 
     async def manage_shopping_list(
         self,
@@ -76,10 +85,17 @@ class ChefAgentMCPClient:
         if items:
             arguments["items"] = items
 
-        result = await self.session.call_tool(
-            "shopping_list_manager", arguments
-        )
-        return json.loads(result[0].text)
+        try:
+            result = await asyncio.wait_for(
+                self.session.call_tool("shopping_list_manager", arguments),
+                timeout=self.timeout,
+            )
+            return json.loads(result[0].text)
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"Shopping list operation timed out after "
+                f"{self.timeout} seconds"
+            )
 
     async def create_shopping_list(self, thread_id: str) -> Dict[str, Any]:
         """Create a new shopping list."""
