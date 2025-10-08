@@ -7,9 +7,11 @@ They are independent of external technologies (database, API, etc.).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
+
+from .ingredient_categorizer import IngredientCategorizer
 
 
 class DietType(Enum):
@@ -40,19 +42,20 @@ class Ingredient:
 class Recipe:
     """Represents a recipe with ingredients, instructions, and metadata."""
 
-    id: int
+    id: Optional[int]
     title: str
     description: Optional[str] = None
-    ingredients: List[Ingredient] = None
+    ingredients: List[Ingredient] = field(default_factory=list)
     instructions: str = ""
     prep_time_minutes: Optional[int] = None
     cook_time_minutes: Optional[int] = None
     servings: Optional[int] = None
-    tags: List[str] = None
+    tags: List[str] = field(default_factory=list)
     difficulty: Optional[str] = None  # "easy", "medium", "hard"
     diet_type: Optional[str] = (
         None  # "vegetarian", "vegan", "gluten_free", etc.
     )
+    user_id: Optional[str] = None  # User who created this recipe
 
     def __post_init__(self):
         if self.ingredients is None:
@@ -91,12 +94,20 @@ class ShoppingItem:
         return f"{status} {self.quantity} {self.unit} {self.name}"
 
 
-@dataclass
 class ShoppingList:
     """Represents a shopping list with items."""
 
-    items: List[ShoppingItem] = None
-    created_at: Optional[str] = None
+    def __init__(
+        self,
+        items: List[ShoppingItem] = None,
+        thread_id: Optional[str] = None,
+        created_at: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ):
+        self.items = items or []
+        self.thread_id = thread_id
+        self.created_at = created_at
+        self.user_id = user_id
 
     def __post_init__(self):
         if self.items is None:
@@ -109,13 +120,19 @@ class ShoppingList:
     def add_ingredients(
         self, ingredients: List[Ingredient], category: Optional[str] = None
     ) -> None:
-        """Add multiple ingredients as shopping items."""
+        """Add multiple ingredients as shopping items with automatic categorization."""
         for ingredient in ingredients:
+            # Use provided category or auto-detect if not provided
+            detected_category = (
+                category
+                or IngredientCategorizer.categorize_ingredient(ingredient.name)
+            )
+
             item = ShoppingItem(
                 name=ingredient.name,
                 quantity=ingredient.quantity,
                 unit=ingredient.unit,
-                category=category,
+                category=detected_category,
             )
             self.add_item(item)
 

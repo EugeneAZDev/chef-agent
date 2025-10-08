@@ -25,6 +25,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
 
+    model_config = {"arbitrary_types_allowed": True}
+
     message: str = Field(..., description="Agent response message")
     menu_plan: Optional[MealPlan] = Field(
         None, description="Generated meal plan"
@@ -37,6 +39,8 @@ class ChatResponse(BaseModel):
 
 class AgentState(BaseModel):
     """State model for LangGraph agent."""
+
+    model_config = {"arbitrary_types_allowed": True}
 
     thread_id: str = Field(..., description="Conversation thread ID")
     messages: List[Dict[str, str]] = Field(
