@@ -2,12 +2,13 @@
 Database connection and schema management.
 """
 
+# Default database path - can be overridden by config
+import os
 import sqlite3
 import threading
 from typing import Optional
 
-# Default database path
-DEFAULT_DB_PATH = "chef_agent.db"
+DEFAULT_DB_PATH = os.getenv("CHEF_AGENT_DB_PATH", "chef_agent.db")
 
 
 class Database:
@@ -41,8 +42,22 @@ class Database:
     def close(self) -> None:
         """Close database connection."""
         if hasattr(self._local, "connection") and self._local.connection:
-            self._local.connection.close()
-            self._local.connection = None
+            try:
+                self._local.connection.close()
+            except Exception:
+                pass  # Ignore errors during cleanup
+            finally:
+                self._local.connection = None
+
+    def cleanup_connections(self) -> None:
+        """Clean up all thread-local connections."""
+        # This is a best-effort cleanup
+        try:
+            if hasattr(self._local, "connection") and self._local.connection:
+                self._local.connection.close()
+                self._local.connection = None
+        except Exception:
+            pass
 
     def _run_migrations(self) -> None:
         """Run database migrations."""
@@ -69,11 +84,31 @@ class Database:
         conn.commit()
         return cursor.rowcount
 
+    def execute_update_in_transaction(
+        self, query: str, params: tuple = ()
+    ) -> int:
+        """Execute an INSERT/UPDATE/DELETE query within a transaction."""
+        conn = self.get_connection()
+        cursor = conn.execute(query, params)
+        return cursor.rowcount
+
     def execute_insert(self, query: str, params: tuple = ()) -> int:
         """Execute an INSERT query and return the last row ID."""
         conn = self.get_connection()
         cursor = conn.execute(query, params)
         conn.commit()
+        return cursor.lastrowid
+
+    def execute_insert_in_transaction(
+        self, query: str, params: tuple = ()
+    ) -> int:
+        """Execute an INSERT query in transaction and return last row ID."""
+        conn = self.get_connection()
+        cursor = conn.execute(query, params)
+        # For INSERT OR IGNORE, check rowcount to see if insert actually
+        # happened
+        if cursor.rowcount == 0:
+            return 0  # Insert was ignored
         return cursor.lastrowid
 
     def begin_transaction(self) -> None:

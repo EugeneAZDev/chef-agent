@@ -54,8 +54,7 @@ CREATE TABLE IF NOT EXISTS shopping_lists (
     user_id TEXT,
     items JSON NOT NULL DEFAULT '[]',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(thread_id, user_id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better performance
@@ -69,7 +68,12 @@ CREATE INDEX IF NOT EXISTS idx_recipe_tags_tag_id ON recipe_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id);
 CREATE INDEX IF NOT EXISTS idx_recipes_title_user ON recipes(title, user_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_lists_user_id ON shopping_lists(user_id);
-CREATE INDEX IF NOT EXISTS idx_shopping_lists_thread_user ON shopping_lists(thread_id, user_id);
+-- Unique constraint for shopping lists (only when user_id is not NULL)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shopping_lists_thread_user
+    ON shopping_lists(thread_id, user_id) WHERE user_id IS NOT NULL;
+-- Unique constraint for shopping lists (only when user_id is NULL)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shopping_lists_thread_no_user
+    ON shopping_lists(thread_id) WHERE user_id IS NULL;
 -- Additional indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_recipes_diet_type ON recipes(diet_type);
 CREATE INDEX IF NOT EXISTS idx_recipes_difficulty ON recipes(difficulty);
@@ -77,3 +81,6 @@ CREATE INDEX IF NOT EXISTS idx_recipes_diet_difficulty ON recipes(diet_type, dif
 CREATE INDEX IF NOT EXISTS idx_recipes_prep_time ON recipes(prep_time_minutes);
 CREATE INDEX IF NOT EXISTS idx_recipes_diet_type_user ON recipes(diet_type, user_id);
 CREATE INDEX IF NOT EXISTS idx_recipes_difficulty_user ON recipes(difficulty, user_id);
+-- Partial index for anonymous users (user_id IS NULL)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_title_anonymous
+ON recipes(title) WHERE user_id IS NULL;

@@ -19,6 +19,25 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
         self.db = db
         self._lock = threading.RLock()  # Reentrant lock for thread safety
 
+    def _validate_user_id(self, user_id: str) -> None:
+        """Validate user_id format to prevent SQL injection."""
+        if user_id is not None:
+            if (
+                not isinstance(user_id, str)
+                or not user_id.replace("-", "").replace("_", "").isalnum()
+            ):
+                raise ValueError("Invalid user_id format")
+
+    def _validate_thread_id(self, thread_id: str) -> None:
+        """Validate thread_id format to prevent SQL injection."""
+        if thread_id is None:
+            raise ValueError("thread_id cannot be None")
+        if (
+            not isinstance(thread_id, str)
+            or not thread_id.replace("-", "").replace("_", "").isalnum()
+        ):
+            raise ValueError("Invalid thread_id format")
+
     def create(
         self, shopping_list: ShoppingList, thread_id: str, user_id: str = None
     ) -> ShoppingList:
@@ -26,10 +45,10 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
         return self._create_shopping_list(shopping_list, thread_id, user_id)
 
     def update(
-        self, shopping_list: ShoppingList, thread_id: str
+        self, shopping_list: ShoppingList, thread_id: str, user_id: str = None
     ) -> ShoppingList:
         """Update an existing shopping list."""
-        return self._create_shopping_list(shopping_list, thread_id)
+        return self._update_shopping_list(shopping_list, thread_id, user_id)
 
     def get_by_id(self, list_id: int) -> Optional[ShoppingList]:
         """Get a shopping list by its ID."""
@@ -47,6 +66,9 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
     ) -> Optional[ShoppingList]:
         """Get a shopping list by conversation thread ID and optionally user
         ID."""
+        self._validate_thread_id(thread_id)
+        self._validate_user_id(user_id)
+        # If user_id is provided, search with user filter for security
         if user_id:
             query = (
                 "SELECT * FROM shopping_lists WHERE thread_id = ? "
@@ -54,7 +76,11 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
             )
             rows = self.db.execute_query(query, (thread_id, user_id))
         else:
-            query = "SELECT * FROM shopping_lists WHERE thread_id = ?"
+            # For anonymous users, only allow access to lists without user_id
+            query = (
+                "SELECT * FROM shopping_lists WHERE thread_id = ? "
+                "AND user_id IS NULL"
+            )
             rows = self.db.execute_query(query, (thread_id,))
 
         if not rows:
@@ -65,21 +91,23 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
 
     def _get_by_thread_id_with_lock(
         self, thread_id: str, user_id: str = None
-    ) -> Optional[ShoppingList]:
-        """Get all shopping lists for a specific user."""
-        query = (
-            "SELECT * FROM shopping_lists WHERE user_id = ? "
-            "ORDER BY created_at DESC"
-        )
-        # We'll rely on the transaction isolation and the row-level lock
+    ) -> List[ShoppingList]:
+        """Get shopping lists for a specific thread with user filtering."""
         if user_id:
+            query = (
+                "SELECT * FROM shopping_lists WHERE thread_id = ? "
+                "AND user_id = ? ORDER BY created_at DESC"
+            )
             rows = self.db.execute_query(query, (thread_id, user_id))
         else:
-            query = "SELECT * FROM shopping_lists WHERE thread_id = ?"
+            query = (
+                "SELECT * FROM shopping_lists WHERE thread_id = ? "
+                "AND user_id IS NULL ORDER BY created_at DESC"
+            )
             rows = self.db.execute_query(query, (thread_id,))
 
         if not rows:
-            return None
+            return []
 
         return [self._row_to_shopping_list(row) for row in rows]
 
@@ -87,53 +115,354 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
         self, shopping_list: ShoppingList, thread_id: str, user_id: str = None
     ) -> ShoppingList:
         """Save a shopping list for a specific thread and optionally user."""
+        self._validate_thread_id(thread_id)
+        self._validate_user_id(user_id)
         with self._lock:  # Ensure thread safety
-            # Check if shopping list already exists for this thread and user
-            existing = self.get_by_thread_id(thread_id, user_id)
+            try:
+                self.db.begin_transaction()
 
-            if existing:
-                return self._update_shopping_list(
-                    shopping_list, thread_id, user_id
-                )
-            else:
-                return self._create_shopping_list(
-                    shopping_list, thread_id, user_id
-                )
+                items_data = self._items_to_json(shopping_list.items)
+
+                # Use proper UPSERT logic without ON CONFLICT to handle
+                # race conditions
+                # This is atomic and prevents data loss
+                if user_id is not None:
+                    # For authenticated users, first try to update existing
+                    # record
+                    update_query = """
+                        UPDATE shopping_lists
+                        SET items = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE thread_id = ? AND user_id = ?
+                    """
+                    rows_affected = self.db.execute_update_in_transaction(
+                        update_query, (items_data, thread_id, user_id)
+                    )
+
+                    # If no rows were updated, insert new record
+                    if rows_affected == 0:
+                        insert_query = """
+                            INSERT INTO shopping_lists
+                            (thread_id, user_id, items, created_at, updated_at)
+                            VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """
+                        self.db.execute_update_in_transaction(
+                            insert_query, (thread_id, user_id, items_data)
+                        )
+                else:
+                    # For anonymous users, first try to update existing record
+                    update_query = """
+                        UPDATE shopping_lists
+                        SET items = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE thread_id = ? AND user_id IS NULL
+                    """
+                    rows_affected = self.db.execute_update_in_transaction(
+                        update_query, (items_data, thread_id)
+                    )
+
+                    # If no rows were updated, insert new record
+                    if rows_affected == 0:
+                        insert_query = """
+                            INSERT INTO shopping_lists
+                            (thread_id, user_id, items, created_at, updated_at)
+                            VALUES (?, NULL, ?, CURRENT_TIMESTAMP,
+                                    CURRENT_TIMESTAMP)
+                        """
+                        self.db.execute_update_in_transaction(
+                            insert_query, (thread_id, items_data)
+                        )
+
+                # Get the created/updated shopping list
+                result = self.get_by_thread_id(thread_id, user_id)
+                if not result:
+                    raise RuntimeError("Failed to save shopping list")
+
+                self.db.commit_transaction()
+                return result
+
+            except Exception as e:
+                self.db.rollback_transaction()
+                raise e
 
     def add_items(
         self, thread_id: str, items: List[ShoppingItem], user_id: str = None
     ) -> None:
         """Add items to an existing shopping list."""
+        self._validate_thread_id(thread_id)
+        self._validate_user_id(user_id)
         with self._lock:  # Ensure thread safety
             try:
                 self.db.begin_transaction()
-                # Use SELECT FOR UPDATE to prevent race conditions
-                existing = self._get_by_thread_id_with_lock(thread_id, user_id)
 
-                if existing:
-                    # Add new items to existing list
-                    existing[0].items.extend(items)
-                    self._update_shopping_list(existing[0], thread_id, user_id)
+                # First, ensure shopping list exists, create if not
+                if user_id is not None:
+                    # For authenticated users, check if list exists first
+                    check_query = """
+                        SELECT id FROM shopping_lists
+                        WHERE thread_id = ? AND user_id = ?
+                    """
+                    existing = self.db.execute_query(
+                        check_query, (thread_id, user_id)
+                    )
+
+                    if not existing:
+                        # Create new list for authenticated user
+                        insert_query = """
+                            INSERT INTO shopping_lists
+                            (thread_id, user_id, items, created_at, updated_at)
+                            VALUES (?, ?, '[]', CURRENT_TIMESTAMP,
+                                    CURRENT_TIMESTAMP)
+                        """
+                        self.db.execute_update_in_transaction(
+                            insert_query, (thread_id, user_id)
+                        )
                 else:
-                    # Create new shopping list with items
-                    new_list = ShoppingList(items=items)
-                    self._create_shopping_list(new_list, thread_id, user_id)
+                    # For anonymous users, check if list exists first
+                    check_query = """
+                        SELECT id FROM shopping_lists
+                        WHERE thread_id = ? AND user_id IS NULL
+                    """
+                    existing = self.db.execute_query(check_query, (thread_id,))
+
+                    if not existing:
+                        # Create new list for anonymous user
+                        insert_query = """
+                            INSERT INTO shopping_lists
+                            (thread_id, user_id, items, created_at, updated_at)
+                            VALUES (?, NULL, '[]', CURRENT_TIMESTAMP,
+                                    CURRENT_TIMESTAMP)
+                        """
+                        self.db.execute_update_in_transaction(
+                            insert_query, (thread_id,)
+                        )
+
+                # Now add items atomically using efficient JSON operations
+                # For small lists (<100 items), use the simple
+                # approach
+                # For large lists, we could optimize further with batch operations
+                if len(items) <= 100:
+                    # Simple approach: get current items, add new ones, update
+                    if user_id is not None:
+                        # Get current items
+                        current_query = """
+                            SELECT items FROM shopping_lists
+                            WHERE thread_id = ? AND user_id = ?
+                        """
+                        current_rows = self.db.execute_query(
+                            current_query, (thread_id, user_id)
+                        )
+                    else:
+                        # Get current items for anonymous user
+                        current_query = """
+                            SELECT items FROM shopping_lists
+                            WHERE thread_id = ? AND user_id IS NULL
+                        """
+                        current_rows = self.db.execute_query(
+                            current_query, (thread_id,)
+                        )
+
+                    current_items = []
+                    if current_rows:
+                        # Parse existing items
+                        try:
+                            current_items_data = json.loads(
+                                current_rows[0]["items"] or "[]"
+                            )
+                            current_items = [
+                                ShoppingItem(
+                                    name=item["name"],
+                                    quantity=item["quantity"],
+                                    unit=item["unit"],
+                                    category=item.get("category"),
+                                    purchased=item.get("purchased", False),
+                                )
+                                for item in current_items_data
+                            ]
+                        except (json.JSONDecodeError, KeyError, TypeError):
+                            current_items = []
+
+                    # Add new items to current items
+                    current_items.extend(items)
+
+                    # Serialize combined items
+                    combined_items_data = self._items_to_json(current_items)
+
+                    # Update with combined items in one operation
+                    if user_id is not None:
+                        update_query = """
+                            UPDATE shopping_lists
+                            SET items = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE thread_id = ? AND user_id = ?
+                        """
+                        self.db.execute_update_in_transaction(
+                            update_query,
+                            (combined_items_data, thread_id, user_id),
+                        )
+                    else:
+                        update_query = """
+                            UPDATE shopping_lists
+                            SET items = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE thread_id = ? AND user_id IS NULL
+                        """
+                        self.db.execute_update_in_transaction(
+                            update_query, (combined_items_data, thread_id)
+                        )
+                else:
+                    # For large lists, use more efficient approach
+                    # Create a temporary table with new items
+                    temp_table_query = """
+                        CREATE TEMP TABLE temp_new_items (
+                            name TEXT,
+                            quantity TEXT,
+                            unit TEXT,
+                            category TEXT,
+                            purchased BOOLEAN
+                        )
+                    """
+                    self.db.execute_update_in_transaction(temp_table_query)
+
+                    # Insert new items into temp table
+                    for item in items:
+                        insert_temp_query = """
+                            INSERT INTO temp_new_items
+                            (name, quantity, unit, category, purchased)
+                            VALUES (?, ?, ?, ?, ?)
+                        """
+                        self.db.execute_update_in_transaction(
+                            insert_temp_query,
+                            (
+                                item.name,
+                                item.quantity,
+                                item.unit,
+                                item.category,
+                                item.purchased,
+                            ),
+                        )
+
+                    # Merge with existing items using JSON functions
+                    if user_id is not None:
+                        merge_query = """
+                            UPDATE shopping_lists
+                            SET items = (
+                                SELECT json_group_array(
+                                    json_object(
+                                        'name', name,
+                                        'quantity', quantity,
+                                        'unit', unit,
+                                        'category', category,
+                                        'purchased', purchased
+                                    )
+                                )
+                                FROM (
+                                    SELECT name, quantity, unit, category,
+                                           purchased
+                                    FROM json_each(shopping_lists.items)
+                                    UNION ALL
+                                    SELECT name, quantity, unit, category,
+                                           purchased
+                                    FROM temp_new_items
+                                )
+                            ),
+                            updated_at = CURRENT_TIMESTAMP
+                            WHERE thread_id = ? AND user_id = ?
+                        """
+                        self.db.execute_update_in_transaction(
+                            merge_query, (thread_id, user_id)
+                        )
+                    else:
+                        merge_query = """
+                            UPDATE shopping_lists
+                            SET items = (
+                                SELECT json_group_array(
+                                    json_object(
+                                        'name', name,
+                                        'quantity', quantity,
+                                        'unit', unit,
+                                        'category', category,
+                                        'purchased', purchased
+                                    )
+                                )
+                                FROM (
+                                    SELECT name, quantity, unit, category,
+                                           purchased
+                                    FROM json_each(shopping_lists.items)
+                                    UNION ALL
+                                    SELECT name, quantity, unit, category,
+                                           purchased
+                                    FROM temp_new_items
+                                )
+                            ),
+                            updated_at = CURRENT_TIMESTAMP
+                            WHERE thread_id = ? AND user_id IS NULL
+                        """
+                        self.db.execute_update_in_transaction(
+                            merge_query, (thread_id,)
+                        )
+
+                    # Clean up temp table
+                    drop_temp_query = "DROP TABLE temp_new_items"
+                    self.db.execute_update_in_transaction(drop_temp_query)
+
                 self.db.commit_transaction()
             except Exception as e:
                 self.db.rollback_transaction()
                 raise e
 
-    def clear(self, thread_id: str) -> None:
+    def clear(self, thread_id: str, user_id: str = None) -> None:
         """Clear all items from a shopping list."""
-        query = "UPDATE shopping_lists SET items = '[]' WHERE thread_id = ?"
-        self.db.execute_update(query, (thread_id,))
+        with self._lock:  # Ensure thread safety
+            try:
+                self.db.begin_transaction()
+                # Check if shopping list exists to prevent race conditions
+                if user_id:
+                    lock_query = (
+                        "SELECT id FROM shopping_lists WHERE thread_id = ? "
+                        "AND user_id = ?"
+                    )
+                    locked_rows = self.db.execute_query(
+                        lock_query, (thread_id, user_id)
+                    )
+                else:
+                    lock_query = (
+                        "SELECT id FROM shopping_lists WHERE thread_id = ? "
+                        "AND user_id IS NULL"
+                    )
+                    locked_rows = self.db.execute_query(
+                        lock_query, (thread_id,)
+                    )
+                if not locked_rows:
+                    self.db.rollback_transaction()
+                    return
+
+                query = (
+                    "UPDATE shopping_lists SET items = '[]' "
+                    "WHERE thread_id = ?"
+                )
+                self.db.execute_update(query, (thread_id,))
+                self.db.commit_transaction()
+            except Exception as e:
+                self.db.rollback_transaction()
+                raise e
 
     def delete(self, list_id: int) -> bool:
         """Delete a shopping list by ID."""
-        affected_rows = self.db.execute_update(
-            "DELETE FROM shopping_lists WHERE id = ?", (list_id,)
-        )
-        return affected_rows > 0
+        with self._lock:  # Ensure thread safety
+            try:
+                self.db.begin_transaction()
+                # Check if shopping list exists to prevent race conditions
+                lock_query = "SELECT id FROM shopping_lists WHERE id = ?"
+                locked_rows = self.db.execute_query(lock_query, (list_id,))
+                if not locked_rows:
+                    self.db.rollback_transaction()
+                    return False
+
+                affected_rows = self.db.execute_update(
+                    "DELETE FROM shopping_lists WHERE id = ?", (list_id,)
+                )
+                self.db.commit_transaction()
+                return affected_rows > 0
+            except Exception as e:
+                self.db.rollback_transaction()
+                raise e
 
     def _create_shopping_list(
         self, shopping_list: ShoppingList, thread_id: str, user_id: str = None
@@ -148,6 +477,12 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
         list_id = self.db.execute_insert(
             query, (thread_id, user_id, items_data)
         )
+
+        # Check for integer overflow (SQLite max is 2^63-1)
+        if list_id > 2**63 - 1:
+            raise ValueError(
+                "Shopping list ID overflow - database limit reached"
+            )
 
         # Update the shopping list with the ID and user_id
         shopping_list.id = list_id

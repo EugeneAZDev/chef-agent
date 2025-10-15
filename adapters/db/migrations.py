@@ -34,8 +34,7 @@ class MigrationRunner:
         self.db.execute_update(
             """
             CREATE TABLE IF NOT EXISTS migrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT UNIQUE NOT NULL,
+                version TEXT PRIMARY KEY,
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """
@@ -125,17 +124,14 @@ class MigrationRunner:
         # Split by semicolon, but be careful with semicolons in strings
         statements = []
         current_statement = ""
-        in_string = False
         string_char = None
 
         for char in sql_clean:
-            if char in ['"', "'"] and not in_string:
-                in_string = True
+            if char in ['"', "'"] and string_char is None:
                 string_char = char
-            elif char == string_char and in_string:
-                in_string = False
+            elif char == string_char:
                 string_char = None
-            elif char == ";" and not in_string:
+            elif char == ";" and string_char is None:
                 if current_statement.strip():
                     statements.append(current_statement.strip())
                 current_statement = ""
