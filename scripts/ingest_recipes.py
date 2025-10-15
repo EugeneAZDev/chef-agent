@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from adapters.db import Database, SQLiteRecipeRepository
-from domain.entities import Ingredient, Recipe
+from domain.entities import DietType, Ingredient, Recipe
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
@@ -51,6 +51,27 @@ def parse_recipe_data(recipe_data: Dict[str, Any]) -> Recipe:
     if isinstance(tags, str):
         tags = [tag.strip() for tag in tags.split(",")]
 
+    # Parse diet_type
+    diet_type_str = recipe_data.get("diet_type")
+    diet_type = None
+    if diet_type_str:
+        try:
+            # Find enum by value, not by name
+            diet_type = next(
+                (dt for dt in DietType if dt.value == diet_type_str), None
+            )
+            if diet_type is None:
+                print(
+                    f"Warning: Invalid diet_type '{diet_type_str}' for recipe "
+                    f"'{recipe_data.get('title', 'Unknown')}'"
+                )
+        except Exception as e:
+            print(
+                f"Warning: Error processing diet_type '{diet_type_str}' for "
+                f"recipe '{recipe_data.get('title', 'Unknown')}': {e}"
+            )
+            diet_type = None
+
     # Create recipe
     recipe = Recipe(
         id=None,  # Will be set by database
@@ -63,6 +84,7 @@ def parse_recipe_data(recipe_data: Dict[str, Any]) -> Recipe:
         servings=recipe_data.get("servings"),
         tags=tags,
         difficulty=recipe_data.get("difficulty"),
+        diet_type=diet_type,
     )
 
     return recipe

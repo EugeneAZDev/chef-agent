@@ -14,6 +14,7 @@ class IngredientCategorizer:
     # Category mappings based on ingredient names
     CATEGORY_KEYWORDS = {
         "produce": [
+            # English
             "tomato",
             "onion",
             "garlic",
@@ -35,7 +36,6 @@ class IngredientCategorizer:
             "strawberry",
             "blueberry",
             "avocado",
-            "ginger",
             "chili",
             "jalapeno",
             "bell pepper",
@@ -47,8 +47,71 @@ class IngredientCategorizer:
             "peas",
             "beans",
             "lentils",
+            # German
+            "tomate",
+            "zwiebel",
+            "knoblauch",
+            "karotte",
+            "kartoffel",
+            "salat",
+            "spinat",
+            "gurke",
+            "pilz",
+            "brokkoli",
+            "blumenkohl",
+            "kohl",
+            "sellerie",
+            "zitrone",
+            "limette",
+            "orange",
+            "apfel",
+            "banane",
+            "erdbeere",
+            "blaubeere",
+            "avocado",
+            "chili",
+            "jalapeno",
+            "zucchini",
+            "aubergine",
+            "kürbis",
+            "mais",
+            "erbsen",
+            "bohnen",
+            "linsen",
+            # French
+            "tomate",
+            "oignon",
+            "ail",
+            "carotte",
+            "pomme de terre",
+            "laitue",
+            "épinard",
+            "concombre",
+            "champignon",
+            "brocoli",
+            "chou-fleur",
+            "chou",
+            "céleri",
+            "citron",
+            "citron vert",
+            "orange",
+            "pomme",
+            "banane",
+            "fraise",
+            "myrtille",
+            "avocat",
+            "piment",
+            "jalapeno",
+            "courgette",
+            "aubergine",
+            "courge",
+            "maïs",
+            "petits pois",
+            "haricots",
+            "lentilles",
         ],
         "dairy": [
+            # English
             "cheese",
             "butter",
             "cream",
@@ -66,6 +129,42 @@ class IngredientCategorizer:
             "buttermilk",
             "greek yogurt",
             "milk",
+            # German
+            "käse",
+            "butter",
+            "sahne",
+            "joghurt",
+            "saure sahne",
+            "quark",
+            "mozzarella",
+            "cheddar",
+            "parmesan",
+            "feta",
+            "ricotta",
+            "mascarpone",
+            "schlagsahne",
+            "halb und halb",
+            "buttermilch",
+            "griechischer joghurt",
+            "milch",
+            # French
+            "fromage",
+            "beurre",
+            "crème",
+            "yaourt",
+            "crème sure",
+            "fromage blanc",
+            "mozzarella",
+            "cheddar",
+            "parmesan",
+            "feta",
+            "ricotta",
+            "mascarpone",
+            "crème épaisse",
+            "demi-écrémé",
+            "babeurre",
+            "yaourt grec",
+            "lait",
         ],
         "meat": [
             "chicken",
@@ -108,7 +207,6 @@ class IngredientCategorizer:
         ],
         "pantry": [
             "salt",
-            "pepper",
             "oil",
             "vinegar",
             "rice",
@@ -128,6 +226,7 @@ class IngredientCategorizer:
             "fettuccine",
         ],
         "spices": [
+            # English
             "paprika",
             "cumin",
             "coriander",
@@ -148,6 +247,51 @@ class IngredientCategorizer:
             "oregano",
             "thyme",
             "rosemary",
+            "ginger",
+            # German
+            "paprika",
+            "kümmel",
+            "koriander",
+            "kurkuma",
+            "zimt",
+            "muskatnuss",
+            "nelken",
+            "kardamom",
+            "lorbeerblätter",
+            "salbei",
+            "majoran",
+            "estragon",
+            "dill",
+            "schnittlauch",
+            "petersilie",
+            "koriander",
+            "basilikum",
+            "oregano",
+            "thymian",
+            "rosmarin",
+            "ingwer",
+            # French
+            "paprika",
+            "cumin",
+            "coriandre",
+            "curcuma",
+            "cannelle",
+            "muscade",
+            "clous de girofle",
+            "cardamome",
+            "feuilles de laurier",
+            "sauge",
+            "marjolaine",
+            "estragon",
+            "aneth",
+            "ciboulette",
+            "persil",
+            "coriandre",
+            "basilic",
+            "origan",
+            "thym",
+            "romarin",
+            "gingembre",
         ],
         "baking": [
             "baking powder",
@@ -205,14 +349,21 @@ class IngredientCategorizer:
         """
         name_lower = ingredient_name.lower().strip()
 
-        # Check each category for keyword matches
+        # Find all matching categories and their keyword lengths
+        matches = []
         for category, keywords in cls.CATEGORY_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in name_lower:
-                    return category
+                    # Use keyword length as priority (longer = more specific)
+                    matches.append((len(keyword), category))
+                    break  # Only one match per category
 
-        # Default category for unmatched ingredients
-        return "other"
+        if not matches:
+            return "other"
+
+        # Return category with the longest (most specific) keyword match
+        matches.sort(key=lambda x: x[0], reverse=True)
+        return matches[0][1]
 
     @classmethod
     def categorize_ingredients(cls, ingredients: list) -> Dict[str, list]:

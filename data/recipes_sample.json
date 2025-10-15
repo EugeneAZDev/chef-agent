@@ -14,7 +14,8 @@
     "cook_time_minutes": 15,
     "servings": 4,
     "difficulty": "easy",
-    "tags": ["low-carb", "breakfast", "keto"]
+    "tags": ["breakfast"],
+    "diet_type": "low-carb"
   },
   {
     "title": "Vegetarian Buddha Bowl",
@@ -32,7 +33,8 @@
     "cook_time_minutes": 30,
     "servings": 2,
     "difficulty": "medium",
-    "tags": ["vegetarian", "healthy", "lunch"]
+    "tags": ["healthy", "lunch"],
+    "diet_type": "vegetarian"
   },
   {
     "title": "High-Protein Chicken Stir-Fry",
@@ -50,7 +52,8 @@
     "cook_time_minutes": 15,
     "servings": 3,
     "difficulty": "easy",
-    "tags": ["high-protein", "dinner", "quick"]
+    "tags": ["dinner", "quick"],
+    "diet_type": "high-protein"
   },
   {
     "title": "Vegan Chocolate Smoothie",
@@ -67,7 +70,8 @@
     "cook_time_minutes": 0,
     "servings": 2,
     "difficulty": "easy",
-    "tags": ["vegan", "smoothie", "dessert", "healthy"]
+    "tags": ["smoothie", "dessert", "healthy"],
+    "diet_type": "vegan"
   },
   {
     "title": "Mediterranean Salmon",
@@ -85,6 +89,7 @@
     "cook_time_minutes": 10,
     "servings": 4,
     "difficulty": "easy",
-    "tags": ["mediterranean", "fish", "dinner", "healthy"]
+    "tags": ["fish", "dinner", "healthy"],
+    "diet_type": "mediterranean"
   }
 ]

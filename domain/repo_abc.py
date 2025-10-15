@@ -63,8 +63,11 @@ class ShoppingListRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_thread_id(self, thread_id: str) -> Optional[ShoppingList]:
-        """Get a shopping list by conversation thread ID."""
+    def get_by_thread_id(
+        self, thread_id: str, user_id: str = None
+    ) -> Optional[ShoppingList]:
+        """Get a shopping list by conversation thread ID and optionally user
+        ID."""
         pass
 
     @abstractmethod
