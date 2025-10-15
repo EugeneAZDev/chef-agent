@@ -91,7 +91,9 @@ class TestDatabaseFailureHandling:
         recipe.user_id = "test-user"
 
         # Mock database to simulate connection failure
-        with patch.object(repo.db, "execute_insert") as mock_insert:
+        with patch.object(
+            repo.db, "execute_insert_in_transaction"
+        ) as mock_insert:
             mock_insert.side_effect = Exception("Database connection failed")
 
             with pytest.raises(Exception, match="Database connection failed"):
@@ -102,8 +104,10 @@ class TestDatabaseFailureHandling:
         repo = SQLiteShoppingListRepository(temp_database)
 
         # Mock database to simulate connection failure
-        with patch.object(repo.db, "execute_insert") as mock_insert:
-            mock_insert.side_effect = Exception("Database connection failed")
+        with patch.object(
+            repo.db, "execute_update_in_transaction"
+        ) as mock_update:
+            mock_update.side_effect = Exception("Database connection failed")
 
             shopping_list = ShoppingList(
                 items=[
@@ -183,7 +187,8 @@ class TestAPIFailureHandling:
             )
 
             response = client.get(
-                "/api/v1/shopping/lists?thread_id=test-thread"
+                "/api/v1/shopping/lists?thread_id=test-thread&"
+                "user_id=test-user"
             )
 
             assert response.status_code == 500

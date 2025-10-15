@@ -3,7 +3,7 @@ Shared test fixtures and utilities.
 """
 
 import tempfile
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -13,7 +13,7 @@ from adapters.db.shopping_list_repository import SQLiteShoppingListRepository
 from adapters.llm.groq_adapter import GroqAdapter
 from adapters.llm.openai_adapter import OpenAIAdapter
 from adapters.mcp.client import ChefAgentMCPClient
-from agent.graph import ChefAgentGraph
+from agent import ChefAgentGraph
 
 
 @pytest.fixture
@@ -99,12 +99,13 @@ def mock_openai_adapter():
 def mock_mcp_client():
     """Mock MCP client for testing."""
     client = Mock(spec=ChefAgentMCPClient)
-    # Make MCP client methods synchronous for testing
-    client.find_recipes = Mock()
-    client.create_shopping_list = Mock()
-    client.add_to_shopping_list = Mock()
-    client.get_shopping_list = Mock()
-    client.clear_shopping_list = Mock()
+    # Make MCP client methods async for testing
+    client.find_recipes = AsyncMock()
+    client.create_shopping_list = AsyncMock()
+    client.add_to_shopping_list = AsyncMock()
+    client.get_shopping_list = AsyncMock()
+    client.clear_shopping_list = AsyncMock()
+    client.manage_shopping_list = AsyncMock()
     return client
 
 
@@ -114,7 +115,15 @@ def mock_chef_agent(mock_mcp_client):
     with patch("agent.graph.LLMFactory") as mock_factory:
         mock_llm = Mock()
         mock_factory.create_llm.return_value = mock_llm
-        return ChefAgentGraph("groq", "test-api-key", mock_mcp_client)
+
+        # Create real ChefAgentGraph instance
+        agent = ChefAgentGraph("groq", "test-api-key", mock_mcp_client)
+
+        # Mock the graph.ainvoke method
+        agent.graph = Mock()
+        agent.graph.ainvoke = AsyncMock()
+
+        return agent
 
 
 @pytest.fixture

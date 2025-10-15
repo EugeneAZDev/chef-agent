@@ -151,7 +151,8 @@ class TestGroqAdapter(BaseLLMTest):
         assert result == mock_response
         adapter._llm.bind_tools.assert_called_once_with(mock_tools)
 
-    def test_ainvoke_failure(self):
+    @pytest.mark.asyncio
+    async def test_ainvoke_failure(self):
         """Test async invoke failure handling."""
         adapter = self.create_mock_groq_adapter()
         mock_messages = [Mock()]
@@ -159,9 +160,7 @@ class TestGroqAdapter(BaseLLMTest):
         adapter._llm.ainvoke.side_effect = Exception("API Error")
 
         with pytest.raises(Exception, match="API Error"):
-            import asyncio
-
-            asyncio.run(adapter.ainvoke(mock_messages))
+            await adapter.ainvoke(mock_messages)
 
     def test_invoke_failure(self):
         """Test sync invoke failure handling."""
@@ -259,7 +258,8 @@ class TestOpenAIAdapter(BaseLLMTest):
         assert result == mock_response
         adapter._llm.bind_tools.assert_called_once_with(mock_tools)
 
-    def test_ainvoke_failure(self):
+    @pytest.mark.asyncio
+    async def test_ainvoke_failure(self):
         """Test async invoke failure handling."""
         adapter = self.create_mock_openai_adapter()
         mock_messages = [Mock()]
@@ -267,9 +267,7 @@ class TestOpenAIAdapter(BaseLLMTest):
         adapter._llm.ainvoke.side_effect = Exception("API Error")
 
         with pytest.raises(Exception, match="API Error"):
-            import asyncio
-
-            asyncio.run(adapter.ainvoke(mock_messages))
+            await adapter.ainvoke(mock_messages)
 
     def test_invoke_failure(self):
         """Test sync invoke failure handling."""

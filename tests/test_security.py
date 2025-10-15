@@ -22,6 +22,18 @@ class TestSecurityVulnerabilities:
 
     def test_sql_injection_thread_id(self, client):
         """Test SQL injection protection in thread_id parameter."""
+        # First, create a test recipe to verify it wasn't affected
+        test_recipe = {
+            "title": "Security Test Recipe",
+            "instructions": "Test recipe for security testing",
+            "ingredients": [
+                {"name": "test", "quantity": "1", "unit": "piece"}
+            ],
+        }
+        create_response = client.post("/api/v1/recipes/", json=test_recipe)
+        assert create_response.status_code == 200
+        recipe_id = create_response.json()["recipe"]["id"]
+
         # Test various SQL injection attempts
         malicious_thread_ids = [
             "'; DROP TABLE recipes; --",
@@ -40,12 +52,32 @@ class TestSecurityVulnerabilities:
             # but should not execute the SQL injection
             assert response.status_code in [400, 404]
 
+            # Verify no SQL injection occurred by checking response content
+            if response.status_code == 400:
+                assert "Invalid thread_id format" in response.json()["detail"]
+            elif response.status_code == 404:
+                assert "not found" in response.json()["detail"].lower()
+
             # Test shopping endpoints
             response = client.get(
                 f"/api/v1/shopping/lists?thread_id={malicious_id}"
             )
             # Shopping endpoint now validates thread_id format
             assert response.status_code in [400, 500]
+
+            # Verify no SQL injection occurred
+            if response.status_code == 400:
+                assert "Invalid thread_id format" in response.json()["detail"]
+
+        # Verify our test recipe still exists and wasn't affected
+        verify_response = client.get(f"/api/v1/recipes/{recipe_id}")
+        assert verify_response.status_code == 200
+        assert (
+            verify_response.json()["recipe"]["title"] == "Security Test Recipe"
+        )
+
+        # Clean up - delete the test recipe
+        client.delete(f"/api/v1/recipes/{recipe_id}")
 
     def test_xss_protection(self, client):
         """Test XSS protection in API responses."""

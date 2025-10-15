@@ -254,7 +254,9 @@ class TestRaceConditionFixes:
         recipe.user_id = "test-user"
 
         # Mock the database execute_insert to fail
-        with patch.object(repo.db, "execute_insert") as mock_insert:
+        with patch.object(
+            repo.db, "execute_insert_in_transaction"
+        ) as mock_insert:
             mock_insert.side_effect = Exception("Database error")
 
             with pytest.raises(Exception, match="Database error"):

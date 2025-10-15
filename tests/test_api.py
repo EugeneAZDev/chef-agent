@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from agent.graph import ChefAgentGraph
+from agent import ChefAgentGraph
 from agent.memory import MemoryManager
 from agent.models import ChatResponse
 from api.chat import get_agent
@@ -193,7 +193,7 @@ class TestChatEndpoints:
     ):
         """Clear endpoint returns 200."""
         # Arrange
-        mock_agent.memory_manager.clear_thread = AsyncMock()
+        mock_agent.memory_manager.clear_conversation = AsyncMock()
 
         # Act
         with TestClient(app) as client:

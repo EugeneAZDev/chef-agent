@@ -5,19 +5,10 @@ This module contains comprehensive tests for the recipe management API,
 including search, creation, and retrieval functionality.
 """
 
-import logging
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-from domain.entities import Recipe
-from main import app
+from domain.entities import DietType, Recipe
 from tests.base_test import BaseAPITest
-
-logger = logging.getLogger(__name__)
-
-# Test client
-client = TestClient(app)
 
 
 class TestRecipeEndpoints(BaseAPITest):
@@ -36,7 +27,7 @@ class TestRecipeEndpoints(BaseAPITest):
             cook_time_minutes=20,
             servings=2,
             difficulty="easy",
-            diet_type="vegetarian",
+            diet_type=DietType.VEGETARIAN,
             ingredients=[],
             tags=[],
         )
@@ -68,7 +59,7 @@ class TestRecipeEndpoints(BaseAPITest):
             cook_time_minutes=20,
             servings=4,
             difficulty="easy",
-            diet_type="vegetarian",
+            diet_type=DietType.VEGETARIAN,
             ingredients=[],
             tags=[],
         )
@@ -102,7 +93,7 @@ class TestRecipeEndpoints(BaseAPITest):
         mock_repo.search_recipes.return_value = []
 
         # Test request
-        response = client.get("/api/v1/recipes/?query=nonexistent")
+        response = self.client.get("/api/v1/recipes/?query=nonexistent")
 
         # Assertions
         assert response.status_code == 200
@@ -139,7 +130,7 @@ class TestRecipeEndpoints(BaseAPITest):
         mock_repo.get_by_id.return_value = None
 
         # Test request
-        response = client.get("/api/v1/recipes/999")
+        response = self.client.get("/api/v1/recipes/999")
 
         # Assertions
         assert response.status_code == 404
@@ -149,13 +140,14 @@ class TestRecipeEndpoints(BaseAPITest):
     @patch("api.recipes.recipe_repo")
     def test_create_recipe_success(self, mock_repo, test_recipe_api_data):
         """Test creating a recipe successfully."""
-        # Mock repository response - create real Recipe object
-        mock_created_recipe = Recipe(
-            id=1,
-            title="Test Pasta",
-            description="A delicious test pasta recipe",
-        )
-        mock_repo.save.return_value = mock_created_recipe
+
+        # Mock repository save method to simulate real behavior
+        def mock_save(recipe):
+            # Simulate the real save() behavior: return same object with id set
+            recipe.id = 1
+            return recipe
+
+        mock_repo.save.side_effect = mock_save
 
         # Test request
         response = self.client.post(
@@ -204,7 +196,7 @@ class TestRecipeEndpoints(BaseAPITest):
 
     def test_get_diet_types(self):
         """Test getting available diet types."""
-        response = client.get("/api/v1/recipes/diet-types/")
+        response = self.client.get("/api/v1/recipes/diet-types/")
 
         # Assertions
         assert response.status_code == 200
@@ -216,7 +208,7 @@ class TestRecipeEndpoints(BaseAPITest):
 
     def test_get_difficulty_levels(self):
         """Test getting available difficulty levels."""
-        response = client.get("/api/v1/recipes/difficulty-levels/")
+        response = self.client.get("/api/v1/recipes/difficulty-levels/")
 
         # Assertions
         assert response.status_code == 200
@@ -233,7 +225,7 @@ class TestRecipeEndpoints(BaseAPITest):
         mock_repo.search_recipes.side_effect = Exception("Database error")
 
         # Test request
-        response = client.get("/api/v1/recipes/?query=pasta")
+        response = self.client.get("/api/v1/recipes/?query=pasta")
 
         # Assertions
         assert response.status_code == 500

@@ -164,7 +164,9 @@ class TestSQLiteShoppingListRepository(BaseDatabaseTest):
         assert len(saved_list.items) == 2
 
         # Retrieve shopping list
-        retrieved_list = self.shopping_repo.get_by_thread_id(thread_id)
+        retrieved_list = self.shopping_repo.get_by_thread_id(
+            thread_id, self.test_user_id
+        )
         assert retrieved_list is not None
         assert len(retrieved_list.items) == 2
         assert retrieved_list.items[0].name == "milk"
@@ -186,7 +188,9 @@ class TestSQLiteShoppingListRepository(BaseDatabaseTest):
         self.shopping_repo.add_items(thread_id, new_items)
 
         # Verify all items are present
-        final_list = self.shopping_repo.get_by_thread_id(thread_id)
+        final_list = self.shopping_repo.get_by_thread_id(
+            thread_id, self.test_user_id
+        )
         assert len(final_list.items) == 3
         assert any(item.name == "milk" for item in final_list.items)
         assert any(item.name == "bread" for item in final_list.items)
@@ -205,13 +209,22 @@ class TestSQLiteShoppingListRepository(BaseDatabaseTest):
         self.shopping_repo.save(shopping_list, thread_id)
 
         # Verify list has items
-        assert len(self.shopping_repo.get_by_thread_id(thread_id).items) == 2
+        assert (
+            len(
+                self.shopping_repo.get_by_thread_id(
+                    thread_id, self.test_user_id
+                ).items
+            )
+            == 2
+        )
 
         # Clear list
-        self.shopping_repo.clear(thread_id)
+        self.shopping_repo.clear(thread_id, self.test_user_id)
 
         # Verify list is empty
-        cleared_list = self.shopping_repo.get_by_thread_id(thread_id)
+        cleared_list = self.shopping_repo.get_by_thread_id(
+            thread_id, self.test_user_id
+        )
         assert len(cleared_list.items) == 0
 
     def test_delete_shopping_list(self):

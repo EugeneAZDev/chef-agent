@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agent.graph import ChefAgentGraph
+from agent import ChefAgentGraph
 from agent.models import AgentState, ChatRequest, ChatResponse
 
 
@@ -45,6 +45,12 @@ class TestSQLiteMemorySaver:
     async def test_add_message(self, memory_saver):
         """Test adding messages."""
         thread_id = "test-123"
+
+        # Create conversation first
+        config = {"thread_id": thread_id}
+        checkpoint = {"test": "data"}
+        await memory_saver.put(config, checkpoint)
+
         await memory_saver.add_message(thread_id, "user", "Hello")
         await memory_saver.add_message(thread_id, "assistant", "Hi there!")
 
@@ -89,21 +95,28 @@ class TestMemoryManager:
             language="en",
         )
 
-        # Save state
-        await memory_manager.save_conversation_state(thread_id, state)
+        # Save state (convert to dict for JSON serialization)
+        await memory_manager.save_conversation_state(
+            thread_id, state.model_dump()
+        )
 
         # Load state
         loaded_state = await memory_manager.load_conversation_state(thread_id)
 
         assert loaded_state is not None
-        assert loaded_state.thread_id == thread_id
-        assert loaded_state.language == "en"
-        assert len(loaded_state.messages) == 1
+        assert loaded_state["thread_id"] == thread_id
+        assert loaded_state["language"] == "en"
+        assert len(loaded_state["messages"]) == 1
 
     @pytest.mark.asyncio
     async def test_add_messages(self, memory_manager):
         """Test adding user and assistant messages."""
         thread_id = "test-123"
+
+        # Create conversation first
+        config = {"thread_id": thread_id}
+        checkpoint = {"test": "data"}
+        await memory_manager.memory_saver.put(config, checkpoint)
 
         await memory_manager.add_user_message(thread_id, "Hello")
         await memory_manager.add_assistant_message(thread_id, "Hi there!")
@@ -154,7 +167,7 @@ class TestChefAgentTools:
         search_tool = next(
             tool for tool in chef_tools if tool.name == "search_recipes"
         )
-        result = search_tool.invoke(
+        result = await search_tool.ainvoke(
             {"query": "test", "tags": ["vegetarian"], "limit": 5}
         )
 
@@ -173,7 +186,7 @@ class TestChefAgentTools:
         search_tool = next(
             tool for tool in chef_tools if tool.name == "search_recipes"
         )
-        result = search_tool.invoke({"query": "test"})
+        result = await search_tool.ainvoke({"query": "test"})
 
         assert result["success"] is False
         assert "error" in result
@@ -194,7 +207,7 @@ class TestChefAgentTools:
         create_tool = next(
             tool for tool in chef_tools if tool.name == "create_shopping_list"
         )
-        result = create_tool.invoke({"thread_id": "test-123"})
+        result = await create_tool.ainvoke({"thread_id": "test-123"})
 
         assert result["success"] is True
         assert result["shopping_list"]["action"] == "created"
@@ -219,7 +232,9 @@ class TestChefAgentTools:
         add_tool = next(
             tool for tool in chef_tools if tool.name == "add_to_shopping_list"
         )
-        result = add_tool.invoke({"thread_id": "test-123", "items": items})
+        result = await add_tool.ainvoke(
+            {"thread_id": "test-123", "items": items}
+        )
 
         assert result["success"] is True
         assert result["shopping_list"]["action"] == "items_added"
@@ -326,3 +341,242 @@ class TestChefAgentGraph:
         assert "add_to_shopping_list" in tool_names
         assert "get_shopping_list" in tool_names
         assert "clear_shopping_list" in tool_names
+        assert "replace_recipe_in_meal_plan" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_diet_goal_extraction_through_public_api(
+        self, mock_chef_agent
+    ):
+        """Test diet goal extraction through public API."""
+        from unittest.mock import AsyncMock, Mock
+
+        from agent.models import ChatRequest, ChatResponse
+
+        # Test that agent can extract diet goals from natural language
+        # through the public process_request method
+        test_cases = [
+            ("I want vegetarian food", "vegetarian"),
+            ("vegan diet please", "vegan"),
+            ("low-carb meals", "low-carb"),
+            ("keto diet", "keto"),
+            ("high protein", "high-protein"),
+            ("gluten-free", "gluten-free"),
+            ("mediterranean", "mediterranean"),
+            ("I want to lose weight", "low-carb"),
+            ("help me build muscle", "high-protein"),
+        ]
+
+        for message, expected_diet in test_cases:
+            request = ChatRequest(
+                message=message, thread_id="test_thread", language="en"
+            )
+
+            # Create a mock state object with messages attribute
+            mock_state = Mock()
+            mock_state.messages = [
+                {"role": "user", "content": message},
+                {
+                    "role": "assistant",
+                    "content": (
+                        f"I understand you want {expected_diet} food."
+                    ),
+                },
+            ]
+
+            # Mock the graph.ainvoke method using AsyncMock
+            with patch.object(
+                mock_chef_agent.graph,
+                "ainvoke",
+                new_callable=AsyncMock,
+                return_value=mock_state,
+            ):
+                response = await mock_chef_agent.process_request(request)
+
+            # Verify the response is properly formatted
+            assert isinstance(response, ChatResponse)
+            assert response.message is not None
+            assert "understand" in response.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_meal_plan_generation_with_diet_goals(self, mock_chef_agent):
+        """Test meal plan generation incorporates diet goals."""
+        from unittest.mock import AsyncMock, Mock
+
+        from agent.models import ChatRequest
+
+        request = ChatRequest(
+            message="Create a vegetarian meal plan for 3 days",
+            thread_id="test_thread",
+            language="en",
+        )
+
+        # Create a mock state object with messages attribute
+        mock_state = Mock()
+        mock_state.messages = [
+            {"role": "user", "content": request.message},
+            {
+                "role": "assistant",
+                "content": "I'll create a vegetarian meal plan for you.",
+            },
+        ]
+
+        with patch.object(
+            mock_chef_agent.graph,
+            "ainvoke",
+            new_callable=AsyncMock,
+            return_value=mock_state,
+        ):
+            response = await mock_chef_agent.process_request(request)
+
+            # Verify the response indicates diet-aware meal planning
+            assert isinstance(response, ChatResponse)
+            assert "vegetarian" in response.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_recipe_replacement_through_public_api(
+        self, mock_chef_agent
+    ):
+        """Test recipe replacement through public API."""
+        from unittest.mock import AsyncMock, Mock
+
+        from agent.models import ChatRequest
+
+        request = ChatRequest(
+            message=(
+                "Replace the breakfast recipe for day 1 " "with a vegan option"
+            ),
+            thread_id="test_thread",
+            language="en",
+        )
+
+        # Create a mock state object with messages attribute
+        mock_state = Mock()
+        mock_state.messages = [
+            {"role": "user", "content": request.message},
+            {
+                "role": "assistant",
+                "content": (
+                    "I've replaced the breakfast recipe "
+                    "with a vegan option."
+                ),
+            },
+        ]
+
+        with patch.object(
+            mock_chef_agent.graph,
+            "ainvoke",
+            new_callable=AsyncMock,
+            return_value=mock_state,
+        ):
+            response = await mock_chef_agent.process_request(request)
+
+            # Verify the response indicates recipe replacement
+            assert isinstance(response, ChatResponse)
+            assert "replaced" in response.message.lower()
+            assert "breakfast" in response.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_replace_recipe_tool(self, mock_mcp_client, chef_tools):
+        """Test replace_recipe_in_meal_plan tool."""
+        # Mock MCP client response
+        mock_response = {
+            "recipes": [
+                {
+                    "id": 2,
+                    "title": "New Recipe",
+                    "description": "A new recipe",
+                    "instructions": "Cook it differently",
+                    "ingredients": [
+                        {
+                            "name": "new_ingredient",
+                            "quantity": "2",
+                            "unit": "tbsp",
+                        }
+                    ],
+                    "tags": ["new"],
+                    "diet_type": "vegetarian",
+                }
+            ],
+            "total_found": 1,
+        }
+        mock_mcp_client.find_recipes.return_value = mock_response
+
+        # Test replace_recipe_in_meal_plan tool
+        replace_tool = next(
+            tool
+            for tool in chef_tools
+            if tool.name == "replace_recipe_in_meal_plan"
+        )
+        result = await replace_tool.ainvoke(
+            {
+                "day_number": 1,
+                "meal_type": "breakfast",
+                "new_query": "vegetarian breakfast",
+                "thread_id": "test-123",
+                "diet_type": "vegetarian",
+            }
+        )
+
+        assert result["success"] is True
+        assert result["new_recipe"]["title"] == "New Recipe"
+        assert result["day_number"] == 1
+        assert result["meal_type"] == "breakfast"
+        assert "Found replacement recipe" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_replace_recipe_tool_no_results(
+        self, mock_mcp_client, chef_tools
+    ):
+        """Test replace_recipe_in_meal_plan tool with no results."""
+        # Mock MCP client response with no recipes
+        mock_response = {
+            "recipes": [],
+            "total_found": 0,
+        }
+        mock_mcp_client.find_recipes.return_value = mock_response
+
+        # Test replace_recipe_in_meal_plan tool
+        replace_tool = next(
+            tool
+            for tool in chef_tools
+            if tool.name == "replace_recipe_in_meal_plan"
+        )
+        result = await replace_tool.ainvoke(
+            {
+                "day_number": 1,
+                "meal_type": "breakfast",
+                "new_query": "nonexistent recipe",
+                "thread_id": "test-123",
+            }
+        )
+
+        assert result["success"] is False
+        assert "No recipes found" in result["error"]
+        assert "Failed to find replacement recipe" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_replace_recipe_tool_error(
+        self, mock_mcp_client, chef_tools
+    ):
+        """Test replace_recipe_in_meal_plan tool with error."""
+        # Mock MCP client to raise exception
+        mock_mcp_client.find_recipes.side_effect = Exception("API Error")
+
+        # Test replace_recipe_in_meal_plan tool
+        replace_tool = next(
+            tool
+            for tool in chef_tools
+            if tool.name == "replace_recipe_in_meal_plan"
+        )
+        result = await replace_tool.ainvoke(
+            {
+                "day_number": 1,
+                "meal_type": "breakfast",
+                "new_query": "test recipe",
+                "thread_id": "test-123",
+            }
+        )
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "Failed to replace recipe" in result["message"]

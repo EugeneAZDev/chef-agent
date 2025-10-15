@@ -8,18 +8,13 @@ including creation, item management, and list operations.
 import logging
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-from domain.entities import ShoppingList
-from main import app
+from domain.entities import ShoppingItem, ShoppingList
+from tests.base_test import BaseAPITest
 
 logger = logging.getLogger(__name__)
 
-# Test client
-client = TestClient(app)
 
-
-class TestShoppingListEndpoints:
+class TestShoppingListEndpoints(BaseAPITest):
     """Test cases for shopping list API endpoints."""
 
     @patch("api.shopping.shopping_repo")
@@ -37,8 +32,9 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_thread_id.return_value = mock_list
 
         # Test request
-        response = client.get(
-            "/api/v1/shopping/lists?thread_id=test-thread-123"
+        response = self.client.get(
+            "/api/v1/shopping/lists?thread_id=test-thread-123&"
+            "user_id=test-user"
         )
 
         # Assertions
@@ -47,7 +43,10 @@ class TestShoppingListEndpoints:
         assert "lists" in data
         assert "total" in data
         assert data["thread_id"] == test_shopping_api_data["thread_id"]
-        assert len(data["lists"]) == 1
+        # Verify mock was called with correct parameters
+        mock_repo.get_by_thread_id.assert_called_once_with(
+            "test-thread-123", "test-user"
+        )
 
     @patch("api.shopping.shopping_repo")
     def test_get_shopping_lists_empty(self, mock_repo, test_shopping_api_data):
@@ -56,8 +55,9 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_thread_id.return_value = None
 
         # Test request
-        response = client.get(
-            "/api/v1/shopping/lists?thread_id=test-thread-123"
+        response = self.client.get(
+            "/api/v1/shopping/lists?thread_id=test-thread-123&"
+            "user_id=test-user"
         )
 
         # Assertions
@@ -66,27 +66,27 @@ class TestShoppingListEndpoints:
         assert data["total"] == 0
         assert len(data["lists"]) == 0
 
+        # Verify mock was called with correct parameters
+        mock_repo.get_by_thread_id.assert_called_once_with(
+            "test-thread-123", "test-user"
+        )
+
     @patch("api.shopping.shopping_repo")
     def test_create_shopping_list_success(
         self, mock_repo, test_shopping_api_data
     ):
         """Test creating a shopping list successfully."""
         # Mock repository response
-        mock_created_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [],
-                "name": "Test List",
-            },
-        )()
+        mock_created_list = ShoppingList(items=[])
+        mock_created_list.id = 1
+        mock_created_list.thread_id = test_shopping_api_data["thread_id"]
+        mock_created_list.name = "Test List"
         mock_repo.create.return_value = mock_created_list
 
         # Test request
-        response = client.post(
-            "/api/v1/shopping/lists?thread_id=test-thread-123",
+        response = self.client.post(
+            "/api/v1/shopping/lists?thread_id=test-thread-123&"
+            "user_id=test-user",
             json=test_shopping_api_data,
         )
 
@@ -97,6 +97,12 @@ class TestShoppingListEndpoints:
         assert "Shopping list created successfully" in data["message"]
         assert "list" in data
 
+        # Verify mock was called with correct parameters
+        mock_repo.create.assert_called_once()
+        call_args = mock_repo.create.call_args
+        assert call_args[0][1] == "test-thread-123"  # thread_id
+        assert call_args[0][2] == "test-user"  # user_id
+
     @patch("api.shopping.shopping_repo")
     def test_create_shopping_list_repository_error(
         self, mock_repo, test_shopping_api_data
@@ -106,8 +112,9 @@ class TestShoppingListEndpoints:
         mock_repo.create.side_effect = Exception("Database error")
 
         # Test request
-        response = client.post(
-            "/api/v1/shopping/lists?thread_id=test-thread-123",
+        response = self.client.post(
+            "/api/v1/shopping/lists?thread_id=test-thread-123&"
+            "user_id=test-user",
             json=test_shopping_api_data,
         )
 
@@ -129,7 +136,7 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_id.return_value = mock_list
 
         # Test request
-        response = client.get("/api/v1/shopping/lists/1")
+        response = self.client.get("/api/v1/shopping/lists/1")
 
         # Assertions
         assert response.status_code == 200
@@ -146,7 +153,7 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_id.return_value = None
 
         # Test request
-        response = client.get("/api/v1/shopping/lists/999")
+        response = self.client.get("/api/v1/shopping/lists/999")
 
         # Assertions
         assert response.status_code == 404
@@ -165,7 +172,7 @@ class TestShoppingListEndpoints:
         mock_repo.update.return_value = mock_list
 
         # Test request
-        response = client.post(
+        response = self.client.post(
             "/api/v1/shopping/lists/1/items",
             json=test_shopping_api_data["item_data"],
         )
@@ -181,7 +188,7 @@ class TestShoppingListEndpoints:
         # Test request without name
         incomplete_data = {"amount": 1, "unit": "liter"}
 
-        response = client.post(
+        response = self.client.post(
             "/api/v1/shopping/lists/1/items", json=incomplete_data
         )
 
@@ -199,7 +206,7 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_id.return_value = None
 
         # Test request
-        response = client.post(
+        response = self.client.post(
             "/api/v1/shopping/lists/999/items",
             json=test_shopping_api_data["item_data"],
         )
@@ -213,31 +220,21 @@ class TestShoppingListEndpoints:
     def test_update_list_item_success(self, mock_repo, test_shopping_api_data):
         """Test updating a shopping list item successfully."""
         # Mock repository response
-        mock_item = type(
-            "MockShoppingItem",
-            (),
-            {
-                "name": "Milk",
-                "quantity": "1",
-                "unit": "liter",
-                "purchased": False,
-            },
-        )()
-        mock_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [mock_item],
-            },
-        )()
+        mock_item = ShoppingItem(
+            name="Milk",
+            quantity="1",
+            unit="liter",
+            purchased=False,
+        )
+        mock_list = ShoppingList(items=[mock_item])
+        mock_list.id = 1
+        mock_list.thread_id = test_shopping_api_data["thread_id"]
         mock_repo.get_by_id.return_value = mock_list
         mock_repo.update.return_value = mock_list
 
         # Test request
         update_data = {"name": "Organic Milk", "purchased": True}
-        response = client.put(
+        response = self.client.put(
             "/api/v1/shopping/lists/1/items/0", json=update_data
         )
 
@@ -253,20 +250,14 @@ class TestShoppingListEndpoints:
     ):
         """Test updating an item with invalid index."""
         # Mock repository response
-        mock_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [],  # Empty list
-            },
-        )()
+        mock_list = ShoppingList(items=[])  # Empty list
+        mock_list.id = 1
+        mock_list.thread_id = test_shopping_api_data["thread_id"]
         mock_repo.get_by_id.return_value = mock_list
 
         # Test request
         update_data = {"name": "Updated Item"}
-        response = client.put(
+        response = self.client.put(
             "/api/v1/shopping/lists/1/items/0", json=update_data
         )
 
@@ -279,25 +270,19 @@ class TestShoppingListEndpoints:
     def test_remove_list_item_success(self, mock_repo, test_shopping_api_data):
         """Test removing a shopping list item successfully."""
         # Mock repository response
-        mock_item = type(
-            "MockShoppingItem",
-            (),
-            {"name": "Milk", "quantity": "1", "unit": "liter"},
-        )()
-        mock_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [mock_item],
-            },
-        )()
+        mock_item = ShoppingItem(
+            name="Milk",
+            quantity="1",
+            unit="liter",
+        )
+        mock_list = ShoppingList(items=[mock_item])
+        mock_list.id = 1
+        mock_list.thread_id = test_shopping_api_data["thread_id"]
         mock_repo.get_by_id.return_value = mock_list
         mock_repo.update.return_value = mock_list
 
         # Test request
-        response = client.delete("/api/v1/shopping/lists/1/items/0")
+        response = self.client.delete("/api/v1/shopping/lists/1/items/0")
 
         # Assertions
         assert response.status_code == 200
@@ -312,19 +297,13 @@ class TestShoppingListEndpoints:
     ):
         """Test removing an item with invalid index."""
         # Mock repository response
-        mock_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [],  # Empty list
-            },
-        )()
+        mock_list = ShoppingList(items=[])  # Empty list
+        mock_list.id = 1
+        mock_list.thread_id = test_shopping_api_data["thread_id"]
         mock_repo.get_by_id.return_value = mock_list
 
         # Test request
-        response = client.delete("/api/v1/shopping/lists/1/items/0")
+        response = self.client.delete("/api/v1/shopping/lists/1/items/0")
 
         # Assertions
         assert response.status_code == 404
@@ -337,19 +316,13 @@ class TestShoppingListEndpoints:
     ):
         """Test deleting a shopping list successfully."""
         # Mock repository response
-        mock_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [],
-            },
-        )()
+        mock_list = ShoppingList(items=[])
+        mock_list.id = 1
+        mock_list.thread_id = test_shopping_api_data["thread_id"]
         mock_repo.get_by_id.return_value = mock_list
 
         # Test request
-        response = client.delete("/api/v1/shopping/lists/1")
+        response = self.client.delete("/api/v1/shopping/lists/1")
 
         # Assertions
         assert response.status_code == 200
@@ -366,7 +339,7 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_id.return_value = None
 
         # Test request
-        response = client.delete("/api/v1/shopping/lists/999")
+        response = self.client.delete("/api/v1/shopping/lists/999")
 
         # Assertions
         assert response.status_code == 404
@@ -382,8 +355,9 @@ class TestShoppingListEndpoints:
         mock_repo.get_by_thread_id.side_effect = Exception("Database error")
 
         # Test request
-        response = client.get(
-            "/api/v1/shopping/lists?thread_id=test-thread-123"
+        response = self.client.get(
+            "/api/v1/shopping/lists?thread_id=test-thread-123&"
+            "user_id=test-user"
         )
 
         # Assertions
@@ -397,20 +371,14 @@ class TestShoppingListEndpoints:
     ):
         """Test adding item when repository fails."""
         # Mock repository response
-        mock_list = type(
-            "MockShoppingList",
-            (),
-            {
-                "id": 1,
-                "thread_id": test_shopping_api_data["thread_id"],
-                "items": [],
-            },
-        )()
+        mock_list = ShoppingList(items=[])
+        mock_list.id = 1
+        mock_list.thread_id = test_shopping_api_data["thread_id"]
         mock_repo.get_by_id.return_value = mock_list
         mock_repo.update.side_effect = Exception("Database error")
 
         # Test request
-        response = client.post(
+        response = self.client.post(
             "/api/v1/shopping/lists/1/items",
             json=test_shopping_api_data["item_data"],
         )

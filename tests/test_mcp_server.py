@@ -9,7 +9,13 @@ from mcp.types import TextContent
 
 from adapters.mcp.client import ChefAgentMCPClient
 from adapters.mcp.server import ChefAgentMCPServer
-from domain.entities import Ingredient, Recipe, ShoppingItem, ShoppingList
+from domain.entities import (
+    DietType,
+    Ingredient,
+    Recipe,
+    ShoppingItem,
+    ShoppingList,
+)
 from tests.base_test import BaseDatabaseTest
 
 
@@ -45,7 +51,7 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
             servings=4,
             difficulty="easy",
             tags=["italian", "pasta"],
-            diet_type="vegetarian",
+            diet_type=DietType.VEGETARIAN,
             ingredients=[
                 Ingredient(name="pasta", quantity="500g", unit="g"),
                 Ingredient(name="tomato sauce", quantity="400ml", unit="ml"),
@@ -59,7 +65,7 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
             return_value=[mock_recipe],
         ):
             result = await self.server._handle_recipe_finder(
-                {"query": "pasta"}
+                {"query": "pasta", "user_id": "test-user"}
             )
 
             assert "recipes" in result
@@ -80,7 +86,7 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
             servings=2,
             difficulty="easy",
             tags=["quick", "pasta"],
-            diet_type="vegetarian",
+            diet_type=DietType.VEGETARIAN,
             ingredients=[],
             user_id=self.test_user_id,
         )
@@ -96,6 +102,7 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
                     "tags": ["quick"],
                     "max_prep_time": 10,
                     "servings": 2,
+                    "user_id": "test-user",
                 }
             )
 
@@ -111,7 +118,11 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
             mock_create.return_value = mock_list
 
             result = await self.server._handle_shopping_list_manager(
-                {"action": "create", "thread_id": "test-123"}
+                {
+                    "action": "create",
+                    "thread_id": "test-123",
+                    "user_id": "test-user",
+                }
             )
 
             assert result["action"] == "created"
@@ -140,6 +151,7 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
                 {
                     "action": "add_items",
                     "thread_id": "test-123",
+                    "user_id": "test-user",
                     "items": [
                         {
                             "name": "pasta",
@@ -176,7 +188,11 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
             return_value=mock_list,
         ):
             result = await self.server._handle_shopping_list_manager(
-                {"action": "get", "thread_id": "test-123"}
+                {
+                    "action": "get",
+                    "thread_id": "test-123",
+                    "user_id": "test-user",
+                }
             )
 
             assert result["action"] == "retrieved"
@@ -189,26 +205,38 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
         """Test clearing shopping list."""
         with patch.object(self.server.shopping_repo, "clear") as mock_clear:
             result = await self.server._handle_shopping_list_manager(
-                {"action": "clear", "thread_id": "test-123"}
+                {
+                    "action": "clear",
+                    "thread_id": "test-123",
+                    "user_id": "test-user",
+                }
             )
 
             assert result["action"] == "cleared"
             assert result["thread_id"] == "test-123"
-            mock_clear.assert_called_once_with("test-123")
+            mock_clear.assert_called_once_with("test-123", "test-user")
 
     @pytest.mark.asyncio
     async def test_shopping_list_delete(self):
         """Test deleting shopping list (real DB, no mocks)."""
         # 1. Create shopping list
         create_result = await self.server._handle_shopping_list_manager(
-            {"action": "create", "thread_id": "test-del"}
+            {
+                "action": "create",
+                "thread_id": "test-del",
+                "user_id": "test-user",
+            }
         )
         assert create_result["action"] == "created"
         list_id = create_result["list_id"]
 
         # 2. Delete shopping list
         result = await self.server._handle_shopping_list_manager(
-            {"action": "delete", "thread_id": "test-del"}
+            {
+                "action": "delete",
+                "thread_id": "test-del",
+                "user_id": "test-user",
+            }
         )
 
         # 3. Check response
@@ -230,7 +258,9 @@ class TestChefAgentMCPServer(BaseDatabaseTest):
         ):
             # Simulate the call_tool method behavior
             try:
-                await self.server._handle_recipe_finder({"query": "test"})
+                await self.server._handle_recipe_finder(
+                    {"query": "test", "user_id": "test-user"}
+                )
             except Exception as e:
                 assert str(e) == "Test error"
 
