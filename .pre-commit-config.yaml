@@ -29,14 +29,13 @@ repos:
 
   - repo: local
     hooks:
-      # Temporarily disabled pytest-check due to incomplete test implementations
-      # - id: pytest-check
-      #   name: pytest-check
-      #   entry: poetry run pytest
-      #   language: system
-      #   pass_filenames: false
-      #   always_run: true
-      #   args: [--tb=short]
+      - id: pytest-check
+        name: pytest-check
+        entry: poetry run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: [--tb=short]
 
       - id: flake8-all-files
         name: flake8-all-files
