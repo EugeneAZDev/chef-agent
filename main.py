@@ -4,6 +4,7 @@ Chef Agent FastAPI application.
 This is the main entry point for the Chef Agent API.
 """
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,6 +14,34 @@ from adapters.db import Database
 from api import chat_router, health_router, recipes_router, shopping_router
 from api.limiter import rate_limit_middleware
 from api.middleware import LoggingMiddleware, SecurityHeadersMiddleware
+
+
+def validate_environment():
+    """Validate required environment variables."""
+    # Skip validation during testing
+    import sys
+
+    if any("pytest" in arg for arg in sys.argv):
+        return
+
+    required_vars = [
+        "GROQ_API_KEY",
+        "OPENAI_API_KEY",
+    ]
+
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+
+    if missing_vars:
+        raise EnvironmentError(
+            f"Missing required environment variables: {', '.join(missing_vars)}"
+        )
+
+
+# Validate environment before starting
+validate_environment()
 
 # Global database instance
 db = Database()

@@ -19,7 +19,7 @@ class ChefAgentMCPClient:
     def __init__(self, timeout: int = 30):
         """Initialize the MCP client."""
         self.session: Optional[ClientSession] = None
-        self.timeout = timeout
+        self.timeout = min(timeout, 10)  # Cap at 10 seconds for better UX
 
     async def connect(self):
         """Connect to the MCP server."""

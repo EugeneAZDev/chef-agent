@@ -23,7 +23,7 @@ def set_mcp_client(mcp_client: ChefAgentMCPClient) -> None:
 
 
 @tool
-def search_recipes(
+async def search_recipes(
     query: str = "",
     tags: Optional[List[str]] = None,
     diet_type: Optional[str] = None,
@@ -56,7 +56,7 @@ def search_recipes(
         }
 
     try:
-        result = _mcp_client.find_recipes(
+        result = await _mcp_client.find_recipes(
             query=query,
             tags=tags,
             diet_type=diet_type,
@@ -114,7 +114,7 @@ def search_recipes(
 
 
 @tool
-def create_shopping_list(thread_id: str) -> Dict[str, Any]:
+async def create_shopping_list(thread_id: str) -> Dict[str, Any]:
     """
     Create a new shopping list for a conversation thread.
 
@@ -132,7 +132,7 @@ def create_shopping_list(thread_id: str) -> Dict[str, Any]:
         }
 
     try:
-        result = _mcp_client.create_shopping_list(thread_id)
+        result = await _mcp_client.create_shopping_list(thread_id)
         return {
             "success": True,
             "shopping_list": result,
@@ -147,7 +147,7 @@ def create_shopping_list(thread_id: str) -> Dict[str, Any]:
 
 
 @tool
-def add_to_shopping_list(
+async def add_to_shopping_list(
     thread_id: str, items: List[Dict[str, str]]
 ) -> Dict[str, Any]:
     """
@@ -168,7 +168,7 @@ def add_to_shopping_list(
         }
 
     try:
-        result = _mcp_client.add_to_shopping_list(thread_id, items)
+        result = await _mcp_client.add_to_shopping_list(thread_id, items)
         return {
             "success": True,
             "shopping_list": result,
@@ -183,7 +183,7 @@ def add_to_shopping_list(
 
 
 @tool
-def get_shopping_list(thread_id: str) -> Dict[str, Any]:
+async def get_shopping_list(thread_id: str) -> Dict[str, Any]:
     """
     Get the current shopping list for a conversation thread.
 
@@ -201,7 +201,7 @@ def get_shopping_list(thread_id: str) -> Dict[str, Any]:
         }
 
     try:
-        result = _mcp_client.get_shopping_list(thread_id)
+        result = await _mcp_client.get_shopping_list(thread_id)
         return {
             "success": True,
             "shopping_list": result,
@@ -216,7 +216,7 @@ def get_shopping_list(thread_id: str) -> Dict[str, Any]:
 
 
 @tool
-def clear_shopping_list(thread_id: str) -> Dict[str, Any]:
+async def clear_shopping_list(thread_id: str) -> Dict[str, Any]:
     """
     Clear all items from the shopping list.
 
@@ -234,7 +234,7 @@ def clear_shopping_list(thread_id: str) -> Dict[str, Any]:
         }
 
     try:
-        result = _mcp_client.clear_shopping_list(thread_id)
+        result = await _mcp_client.clear_shopping_list(thread_id)
         return {
             "success": True,
             "shopping_list": result,
@@ -248,6 +248,167 @@ def clear_shopping_list(thread_id: str) -> Dict[str, Any]:
         }
 
 
+@tool
+async def remove_ingredients_from_shopping_list(
+    thread_id: str,
+    ingredients: List[Dict[str, str]],
+    user_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Remove specific ingredients from the shopping list.
+
+    Args:
+        thread_id: Conversation thread ID
+        ingredients: List of ingredients to remove
+        user_id: User ID for shopping list ownership (optional)
+
+    Returns:
+        Dictionary containing removal result
+    """
+    if not _mcp_client:
+        return {
+            "success": False,
+            "error": "MCP client not initialized",
+            "message": "Failed to remove ingredients",
+        }
+
+    try:
+        # Call MCP server to remove ingredients
+        result = await _mcp_client.manage_shopping_list(
+            action="remove_items",
+            thread_id=thread_id,
+            items=ingredients,
+        )
+
+        return {
+            "success": True,
+            "message": f"Removed {len(ingredients)} ingredients from "
+            f"shopping list",
+            "result": result,
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to remove ingredients: {str(e)}",
+            "message": "Error removing ingredients from shopping list",
+        }
+
+
+@tool
+async def replace_recipe_in_meal_plan(
+    day_number: int,
+    meal_type: str,
+    new_query: str,
+    thread_id: str,
+    diet_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Replace a recipe in the meal plan for a specific day and meal.
+
+    Args:
+        day_number: Day number in the meal plan (1-based)
+        meal_type: Type of meal (breakfast, lunch, dinner)
+        new_query: Search query for the new recipe
+        thread_id: Conversation thread ID
+        diet_type: Diet type filter for the new recipe
+
+    Returns:
+        Dictionary containing replacement result and updated meal plan
+    """
+    if not _mcp_client:
+        return {
+            "success": False,
+            "error": "MCP client not initialized",
+            "message": "Failed to replace recipe",
+        }
+
+    try:
+        # Search for new recipe
+        search_result = await _mcp_client.find_recipes(
+            query=new_query,
+            diet_type=diet_type,
+            limit=1,
+        )
+
+        if not search_result.get("recipes"):
+            return {
+                "success": False,
+                "error": f"No recipes found for query: {new_query}",
+                "error_type": "recipe_not_found",
+                "message": "Failed to find replacement recipe",
+                "day_number": day_number,
+                "meal_type": meal_type,
+                "diet_type": diet_type,
+                "query": new_query,
+                "suggestions": [
+                    "Try a different search term",
+                    "Use more general keywords",
+                    "Check if the recipe exists in our database",
+                ],
+            }
+
+        new_recipe_data = search_result["recipes"][0]
+
+        # Convert to Recipe object
+        new_recipe = Recipe(
+            id=new_recipe_data.get("id"),
+            title=new_recipe_data.get("title", ""),
+            description=new_recipe_data.get("description"),
+            instructions=new_recipe_data.get("instructions", ""),
+            prep_time_minutes=new_recipe_data.get("prep_time_minutes"),
+            cook_time_minutes=new_recipe_data.get("cook_time_minutes"),
+            servings=new_recipe_data.get("servings"),
+            difficulty=new_recipe_data.get("difficulty"),
+            tags=new_recipe_data.get("tags", []),
+            diet_type=new_recipe_data.get("diet_type"),
+            ingredients=[
+                Ingredient(
+                    name=ing.get("name", ""),
+                    quantity=ing.get("quantity", ""),
+                    unit=ing.get("unit", ""),
+                )
+                for ing in new_recipe_data.get("ingredients", [])
+            ],
+        )
+
+        return {
+            "success": True,
+            "new_recipe": {
+                "id": new_recipe.id,
+                "title": new_recipe.title,
+                "description": new_recipe.description,
+                "instructions": new_recipe.instructions,
+                "prep_time_minutes": new_recipe.prep_time_minutes,
+                "cook_time_minutes": new_recipe.cook_time_minutes,
+                "servings": new_recipe.servings,
+                "difficulty": new_recipe.difficulty,
+                "tags": new_recipe.tags,
+                "diet_type": (
+                    new_recipe.diet_type if new_recipe.diet_type else None
+                ),
+                "ingredients": [
+                    {
+                        "name": ing.name,
+                        "quantity": ing.quantity,
+                        "unit": ing.unit,
+                    }
+                    for ing in new_recipe.ingredients
+                ],
+            },
+            "day_number": day_number,
+            "meal_type": meal_type,
+            "message": f"Found replacement recipe: {new_recipe.title}",
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to replace recipe: {str(e)}",
+        }
+
+
 def create_chef_tools(mcp_client: ChefAgentMCPClient) -> List:
     """Create and return all chef agent tools."""
     set_mcp_client(mcp_client)
@@ -257,4 +418,5 @@ def create_chef_tools(mcp_client: ChefAgentMCPClient) -> List:
         add_to_shopping_list,
         get_shopping_list,
         clear_shopping_list,
+        replace_recipe_in_meal_plan,
     ]
