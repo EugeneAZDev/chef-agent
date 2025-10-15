@@ -22,9 +22,20 @@ router = APIRouter(prefix="/api/v1/shopping", tags=["shopping"])
 
 def serialize_shopping_list(shopping_list) -> dict:
     """Serialize ShoppingList object to dictionary."""
+    if shopping_list is None:
+        return {
+            "id": None,
+            "thread_id": None,
+            "user_id": None,
+            "items": [],
+            "created_at": None,
+            "updated_at": None,
+        }
+
     return {
         "id": shopping_list.id,
         "thread_id": getattr(shopping_list, "thread_id", None),
+        "user_id": getattr(shopping_list, "user_id", None),
         "items": (
             [
                 {
@@ -36,7 +47,7 @@ def serialize_shopping_list(shopping_list) -> dict:
                 }
                 for item in shopping_list.items
             ]
-            if shopping_list.items
+            if shopping_list.items is not None
             else []
         ),
         "created_at": getattr(shopping_list, "created_at", None),
@@ -78,6 +89,7 @@ shopping_repo = SQLiteShoppingListRepository(db)
 )
 async def get_shopping_lists(
     thread_id: str = Depends(validate_thread_id),
+    user_id: str = Query(..., description="User ID for authentication"),
 ) -> Dict[str, Any]:
     """
     Get all shopping lists for a specific thread.
@@ -88,7 +100,7 @@ async def get_shopping_lists(
         logger.info(f"Getting shopping lists for thread: {thread_id}")
 
         # Get lists for thread
-        lists = shopping_repo.get_by_thread_id(thread_id)
+        lists = shopping_repo.get_by_thread_id(thread_id, user_id)
 
         # Handle single list vs list of lists
         if isinstance(lists, list):
@@ -108,7 +120,8 @@ async def get_shopping_lists(
     except Exception as e:
         logger.error(f"Error getting shopping lists: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get shopping lists: {str(e)}"
+            status_code=500,
+            detail="Failed to get shopping lists. Please try again.",
         )
 
 
@@ -120,6 +133,7 @@ async def get_shopping_lists(
 )
 async def create_shopping_list(
     thread_id: str = Depends(validate_thread_id),
+    user_id: str = Query(..., description="User ID for authentication"),
     name: Optional[str] = Query(
         None, description="Optional name for the list"
     ),
@@ -133,12 +147,12 @@ async def create_shopping_list(
         logger.info(f"Creating shopping list for thread: {thread_id}")
 
         # Create shopping list
-        shopping_list = ShoppingList(items=[])
+        shopping_list = ShoppingList(items=[], user_id=user_id)
         if name:
             shopping_list.name = name
 
         # Save to database
-        created_list = shopping_repo.create(shopping_list, thread_id)
+        created_list = shopping_repo.create(shopping_list, thread_id, user_id)
 
         return {
             "list": serialize_shopping_list(created_list),
@@ -149,7 +163,8 @@ async def create_shopping_list(
     except Exception as e:
         logger.error(f"Error creating shopping list: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to create shopping list: {str(e)}"
+            status_code=500,
+            detail="Failed to create shopping list. Please try again.",
         )
 
 
@@ -185,7 +200,8 @@ async def get_shopping_list(list_id: int) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error getting shopping list {list_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to get shopping list: {str(e)}"
+            status_code=500,
+            detail="Failed to get shopping list. Please try again.",
         )
 
 
@@ -229,6 +245,10 @@ async def add_item_to_list(
             purchased=item_data.get("purchased", False),
         )
 
+        # Ensure items list exists
+        if shopping_list.items is None:
+            shopping_list.items = []
+
         # Validate list size before adding
         validate_shopping_list_size(shopping_list.items + [item])
 
@@ -237,7 +257,9 @@ async def add_item_to_list(
 
         # Update in database
         updated_list = shopping_repo.update(
-            shopping_list, shopping_list.thread_id
+            shopping_list,
+            shopping_list.thread_id,
+            getattr(shopping_list, "user_id", None),
         )
 
         return {
@@ -251,7 +273,7 @@ async def add_item_to_list(
     except Exception as e:
         logger.error(f"Error adding item to list {list_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to add item: {str(e)}"
+            status_code=500, detail="Failed to add item. Please try again."
         )
 
 
@@ -281,7 +303,9 @@ async def update_list_item(
             )
 
         # Check item index
-        if item_index >= len(shopping_list.items):
+        if shopping_list.items is None or item_index >= len(
+            shopping_list.items
+        ):
             raise HTTPException(
                 status_code=404, detail=f"Item at index {item_index} not found"
             )
@@ -290,18 +314,20 @@ async def update_list_item(
         item = shopping_list.items[item_index]
         if "name" in item_data:
             item.name = item_data["name"]
-        if "amount" in item_data:
-            item.amount = item_data["amount"]
+        if "quantity" in item_data:
+            item.quantity = item_data["quantity"]
         if "unit" in item_data:
             item.unit = item_data["unit"]
-        if "notes" in item_data:
-            item.notes = item_data["notes"]
+        if "category" in item_data:
+            item.category = item_data["category"]
         if "purchased" in item_data:
             item.purchased = item_data["purchased"]
 
         # Update in database
         updated_list = shopping_repo.update(
-            shopping_list, shopping_list.thread_id
+            shopping_list,
+            shopping_list.thread_id,
+            getattr(shopping_list, "user_id", None),
         )
 
         return {
@@ -315,7 +341,7 @@ async def update_list_item(
     except Exception as e:
         logger.error(f"Error updating item in list {list_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to update item: {str(e)}"
+            status_code=500, detail="Failed to update item. Please try again."
         )
 
 
@@ -343,7 +369,9 @@ async def remove_list_item(list_id: int, item_index: int) -> Dict[str, Any]:
             )
 
         # Check item index
-        if item_index >= len(shopping_list.items):
+        if shopping_list.items is None or item_index >= len(
+            shopping_list.items
+        ):
             raise HTTPException(
                 status_code=404, detail=f"Item at index {item_index} not found"
             )
@@ -353,7 +381,9 @@ async def remove_list_item(list_id: int, item_index: int) -> Dict[str, Any]:
 
         # Update in database
         updated_list = shopping_repo.update(
-            shopping_list, shopping_list.thread_id
+            shopping_list,
+            shopping_list.thread_id,
+            getattr(shopping_list, "user_id", None),
         )
 
         return {
@@ -374,7 +404,7 @@ async def remove_list_item(list_id: int, item_index: int) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error removing item from list {list_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to remove item: {str(e)}"
+            status_code=500, detail="Failed to remove item. Please try again."
         )
 
 
@@ -414,5 +444,6 @@ async def delete_shopping_list(list_id: int) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error deleting shopping list {list_id}: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to delete shopping list: {str(e)}"
+            status_code=500,
+            detail="Failed to delete shopping list. Please try again.",
         )

@@ -73,7 +73,11 @@ class LLMFactory:
         try:
             from config import settings
         except ImportError:
-            raise ImportError("Could not import settings from config")
+            # Make import optional to avoid runtime errors
+            raise ImportError(
+                "Could not import settings from config. "
+                "Please use create_llm() method with explicit parameters instead."
+            )
 
         try:
             provider_enum = LLMProvider(provider.lower())

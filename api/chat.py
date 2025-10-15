@@ -9,16 +9,56 @@ import logging
 import re
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from adapters.i18n import translate
 from adapters.mcp.client import ChefAgentMCPClient
-from agent.graph import ChefAgentGraph
+from agent import ChefAgentGraph
 from agent.models import ChatRequest, ChatResponse, ErrorResponse
 
 logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+
+
+def get_agent() -> ChefAgentGraph:
+    """Get ChefAgentGraph instance."""
+    return ChefAgentGraph()
+
+
+@router.post("/", response_model=ChatResponse)
+async def chat(
+    request: ChatRequest,
+    language: str = Query(
+        "en", description="Language code (en, ru, es, fr, de)"
+    ),
+    agent: ChefAgentGraph = Depends(get_agent),
+) -> ChatResponse:
+    """
+    Process a chat message and return a response.
+
+    This endpoint handles user messages and returns AI responses
+    with support for multiple languages.
+    """
+    try:
+        # Override language from request if provided
+        if hasattr(request, "language") and request.language:
+            language = request.language
+
+        # Process the request
+        response = await agent.process_request(request)
+
+        # Add language support to response
+        if hasattr(response, "message"):
+            response.message = translate("welcome", language)
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error processing chat request: {e}")
+        error_msg = translate("error_occurred", language)
+        raise HTTPException(status_code=500, detail=f"{error_msg}: {str(e)}")
 
 
 def validate_thread_id(thread_id: str) -> str:
@@ -101,7 +141,8 @@ async def send_message(
     except Exception as e:
         logger.error(f"Error processing message: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to process message: {str(e)}"
+            status_code=500,
+            detail="Failed to process message. Please try again.",
         )
 
 
@@ -151,7 +192,9 @@ async def get_conversation_history(
         logger.error(f"Error retrieving conversation history: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to retrieve conversation history: {str(e)}",
+            detail=(
+                "Failed to retrieve conversation history. " "Please try again."
+            ),
         )
 
 
@@ -179,7 +222,7 @@ async def clear_conversation_thread(
         logger.info(f"Clearing thread {thread_id}")
 
         # Clear the conversation thread
-        await agent.memory_manager.clear_thread(thread_id)
+        await agent.memory_manager.clear_conversation(thread_id)
 
         return {
             "message": f"Thread {thread_id} cleared successfully",
@@ -190,7 +233,7 @@ async def clear_conversation_thread(
         logger.error(f"Error clearing conversation thread: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to clear conversation thread: {str(e)}",
+            detail="Failed to clear conversation thread. Please try again.",
         )
 
 
@@ -223,5 +266,5 @@ async def list_threads(
     except Exception as e:
         logger.error(f"Error listing threads: {e}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to list threads: {str(e)}"
+            status_code=500, detail="Failed to list threads. Please try again."
         )

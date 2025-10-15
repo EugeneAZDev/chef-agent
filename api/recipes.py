@@ -85,7 +85,9 @@ async def search_recipes(
                 "cook_time_minutes": recipe.cook_time_minutes,
                 "servings": recipe.servings,
                 "difficulty": recipe.difficulty,
-                "diet_type": recipe.diet_type,
+                "diet_type": (
+                    recipe.diet_type.value if recipe.diet_type else None
+                ),
                 "user_id": recipe.user_id,
                 "ingredients": (
                     [
@@ -109,6 +111,11 @@ async def search_recipes(
             "filters": search_params,
         }
 
+    except ValueError as e:
+        logger.warning(f"Invalid search parameters: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid search parameters: {str(e)}"
+        )
     except Exception as e:
         logger.error(f"Error searching recipes: {e}")
         raise HTTPException(
