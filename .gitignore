@@ -15,6 +15,7 @@ env/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 
@@ -37,3 +38,18 @@ htmlcov/
 
 # Pre-commit
 .pre-commit-cache/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+agent_memory.sqlite
+chef_agent.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment variables
+.env.local
+.env.production
