@@ -29,7 +29,7 @@ repos:
 
   - repo: local
     hooks:
-      # Temporarily disabled pytest-check due to environment issues
+      # Temporarily disabled pytest-check due to incomplete test implementations
       # - id: pytest-check
       #   name: pytest-check
       #   entry: poetry run pytest
