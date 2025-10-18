@@ -303,9 +303,9 @@ class TestLLMErrorHandling:
 
         graph = ChefAgentGraph("groq", "test-key", Mock())
 
-        # Mock LLM to return None
-        with patch.object(graph, "llm_with_tools") as mock_llm:
-            mock_llm.ainvoke = AsyncMock(return_value=None)
+        # Mock graph to return None response
+        with patch.object(graph, "graph") as mock_graph:
+            mock_graph.ainvoke = AsyncMock(return_value=None)
 
             from agent.models import ChatRequest
 
@@ -326,9 +326,9 @@ class TestLLMErrorHandling:
 
         graph = ChefAgentGraph("groq", "test-key", Mock())
 
-        # Mock LLM to return empty response
-        with patch.object(graph, "llm_with_tools") as mock_llm:
-            mock_llm.ainvoke = AsyncMock(return_value={"messages": []})
+        # Mock graph to return empty response
+        with patch.object(graph, "graph") as mock_graph:
+            mock_graph.ainvoke = AsyncMock(return_value={"messages": []})
 
             from agent.models import ChatRequest
 

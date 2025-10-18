@@ -14,9 +14,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
             "Welcome to Chef Agent! I can help you plan meals and create "
             "shopping lists."
         ),
-        "error_occurred": "An error occurred while processing your request.",
-        "no_recipes_found": "No recipes found matching your criteria.",
-        "meal_plan_generated": "Your meal plan has been generated successfully!",
+        "error_occurred": ("An error occurred while processing your request."),
+        "no_recipes_found": ("No recipes found matching your criteria."),
+        "meal_plan_generated": (
+            "Your meal plan has been generated successfully!"
+        ),
         "shopping_list_created": "Shopping list created successfully!",
         # Meal planning
         "meal_plan_title": "Meal Plan",
@@ -128,7 +130,9 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "no_recipes_found": (
             "No se encontraron recetas que coincidan con tus criterios."
         ),
-        "meal_plan_generated": "¡Tu plan de comidas ha sido generado exitosamente!",
+        "meal_plan_generated": (
+            "¡Tu plan de comidas ha sido generado exitosamente!"
+        ),
         "shopping_list_created": "¡Lista de compras creada exitosamente!",
         # Meal planning
         "meal_plan_title": "Plan de Comidas",
@@ -184,8 +188,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "error_occurred": (
             "Une erreur s'est produite lors du traitement de votre demande."
         ),
-        "no_recipes_found": "Aucune recette trouvée correspondant à vos critères.",
-        "meal_plan_generated": "Votre plan de repas a été généré avec succès !",
+        "no_recipes_found": (
+            "Aucune recette trouvée correspondant à vos critères."
+        ),
+        "meal_plan_generated": (
+            "Votre plan de repas a été généré avec succès !"
+        ),
         "shopping_list_created": "Liste de courses créée avec succès !",
         # Meal planning
         "meal_plan_title": "Plan de Repas",
@@ -238,8 +246,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
             "Willkommen bei Chef Agent! Ich kann Ihnen helfen, Mahlzeiten "
             "zu planen und Einkaufslisten zu erstellen."
         ),
-        "error_occurred": "Ein Fehler ist beim Verarbeiten Ihrer Anfrage aufgetreten.",
-        "no_recipes_found": "Keine Rezepte gefunden, die Ihren Kriterien entsprechen.",
+        "error_occurred": (
+            "Ein Fehler ist beim Verarbeiten Ihrer Anfrage aufgetreten."
+        ),
+        "no_recipes_found": (
+            "Keine Rezepte gefunden, die Ihren Kriterien entsprechen."
+        ),
         "meal_plan_generated": "Ihr Speiseplan wurde erfolgreich erstellt!",
         "shopping_list_created": "Einkaufsliste erfolgreich erstellt!",
         # Meal planning

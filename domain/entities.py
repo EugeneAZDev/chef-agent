@@ -92,8 +92,8 @@ class Recipe:
     updated_at: Optional[str] = None
 
     def __post_init__(self):
-        if self.ingredients is None:
-            self.ingredients = []
+        # ingredients and tags are initialized with default_factory=list
+        # so they will never be None, no need to check
         if self.tags is None:
             self.tags = []
 
@@ -156,19 +156,19 @@ class ShoppingItem:
         return f"{status} {self.quantity} {self.unit} {self.name}"
 
 
+@dataclass
 class ShoppingList:
     """Represents a shopping list with items."""
 
-    def __init__(
-        self,
-        items: List[ShoppingItem] = None,
-        created_at: Optional[str] = None,
-        user_id: Optional[str] = None,
-    ):
-        self.items = items if items is not None else []
-        self.thread_id: Optional[str] = None  # Set by repository when loading
-        self.created_at = created_at or get_current_timestamp()
-        self.user_id = user_id
+    items: List[ShoppingItem] = field(default_factory=list)
+    created_at: Optional[str] = None
+    user_id: Optional[str] = None
+    thread_id: Optional[str] = None  # Set by repository when loading
+
+    def __post_init__(self):
+        """Initialize default values after dataclass creation."""
+        if self.created_at is None:
+            self.created_at = get_current_timestamp()
 
     def add_item(self, item: ShoppingItem) -> None:
         """Add an item to the shopping list."""

@@ -37,6 +37,32 @@ class SQLiteMemorySaver:
             self._connection.execute("PRAGMA foreign_keys=ON")
         return self._connection
 
+    def get_next_version(self, *args, **kwargs) -> int:
+        """Get the next version number for the given config."""
+        # For simplicity, we'll use a timestamp-based version
+        import time
+
+        return int(time.time() * 1000)  # milliseconds since epoch
+
+    async def aput_writes(
+        self, config: RunnableConfig, writes: List[Any], *args, **kwargs
+    ) -> None:
+        """Async put writes for LangGraph compatibility."""
+        thread_id = config.get("thread_id")
+        if thread_id and writes:
+            # Store the last write using our existing put method
+            await self.put(config, writes[-1] if writes else None)
+
+    async def aget_tuple(self, config: RunnableConfig) -> Optional[tuple]:
+        """Async get tuple for LangGraph compatibility."""
+        thread_id = config.get("thread_id")
+        if thread_id:
+            # Try to get state from our existing get method
+            state = await self.get(config)
+            if state:
+                return (state, self.get_next_version())
+        return None
+
     def close(self) -> None:
         """Close database connection."""
         if self._connection:

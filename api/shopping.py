@@ -82,6 +82,45 @@ shopping_repo = SQLiteShoppingListRepository(db)
 
 
 @router.get(
+    "/",
+    response_model=Dict[str, Any],
+    summary="Get shopping lists overview",
+    description="Get overview of shopping lists",
+)
+async def get_shopping_overview() -> Dict[str, Any]:
+    """
+    Get shopping lists overview.
+
+    Returns basic information about shopping lists.
+    """
+    try:
+        logger.info("Getting shopping lists overview")
+
+        # Get basic info about shopping lists
+        # We'll use a simple query to count lists
+        conn = db.get_connection()
+        cursor = conn.execute("SELECT COUNT(*) as count FROM shopping_lists")
+        count = cursor.fetchone()["count"]
+
+        return {
+            "message": "Shopping lists API is working",
+            "total_lists": count,
+            "endpoints": {
+                "get_lists": "/api/v1/shopping/lists?thread_id=test&user_id=test",
+                "create_list": "/api/v1/shopping/lists?thread_id=test&user_id=test",
+                "get_list_by_id": "/api/v1/shopping/lists/{list_id}",
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting shopping overview: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get shopping overview. Please try again.",
+        )
+
+
+@router.get(
     "/lists",
     response_model=Dict[str, Any],
     summary="Get shopping lists",

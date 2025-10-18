@@ -9,14 +9,14 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import tool
 
-from adapters.mcp.client import ChefAgentMCPClient
+from adapters.mcp.http_client import ChefAgentHTTPMCPClient
 from domain.entities import Ingredient, Recipe
 
 # Global MCP client instance for tools
-_mcp_client: Optional[ChefAgentMCPClient] = None
+_mcp_client: Optional[ChefAgentHTTPMCPClient] = None
 
 
-def set_mcp_client(mcp_client: ChefAgentMCPClient) -> None:
+def set_mcp_client(mcp_client: ChefAgentHTTPMCPClient) -> None:
     """Set the global MCP client for tools."""
     global _mcp_client
     _mcp_client = mcp_client
@@ -409,14 +409,20 @@ async def replace_recipe_in_meal_plan(
         }
 
 
-def create_chef_tools(mcp_client: ChefAgentMCPClient) -> List:
+def create_chef_tools(
+    mcp_client: Optional[ChefAgentHTTPMCPClient] = None,
+) -> List:
     """Create and return all chef agent tools."""
-    set_mcp_client(mcp_client)
-    return [
-        search_recipes,
-        create_shopping_list,
-        add_to_shopping_list,
-        get_shopping_list,
-        clear_shopping_list,
-        replace_recipe_in_meal_plan,
-    ]
+    if mcp_client:
+        set_mcp_client(mcp_client)
+        return [
+            search_recipes,
+            create_shopping_list,
+            add_to_shopping_list,
+            get_shopping_list,
+            clear_shopping_list,
+            replace_recipe_in_meal_plan,
+        ]
+    else:
+        # Return empty list when no MCP client
+        return []

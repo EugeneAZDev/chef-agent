@@ -124,8 +124,7 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
                 items_data = self._items_to_json(shopping_list.items)
 
                 # Use proper UPSERT logic without ON CONFLICT to handle
-                # race conditions
-                # This is atomic and prevents data loss
+                # race conditions - atomic and prevents data loss
                 if user_id is not None:
                     # For authenticated users, first try to update existing
                     # record
@@ -143,7 +142,8 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
                         insert_query = """
                             INSERT INTO shopping_lists
                             (thread_id, user_id, items, created_at, updated_at)
-                            VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            VALUES (?, ?, ?, CURRENT_TIMESTAMP,
+                                    CURRENT_TIMESTAMP)
                         """
                         self.db.execute_update_in_transaction(
                             insert_query, (thread_id, user_id, items_data)
@@ -236,9 +236,8 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
                         )
 
                 # Now add items atomically using efficient JSON operations
-                # For small lists (<100 items), use the simple
-                # approach
-                # For large lists, we could optimize further with batch operations
+                # For small lists (<100 items), use simple approach
+                # For large lists, we could optimize with batch operations
                 if len(items) <= 100:
                     # Simple approach: get current items, add new ones, update
                     if user_id is not None:
@@ -546,6 +545,9 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
 
     def _items_to_json(self, items: List[ShoppingItem]) -> str:
         """Convert shopping items to JSON string."""
+        if items is None:
+            return "[]"
+
         items_data = [
             {
                 "name": item.name,

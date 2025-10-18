@@ -36,7 +36,7 @@ def mock_agent() -> ChefAgentGraph:
     # Mock process_request to return a real ChatResponse, not a coroutine
     from agent.models import ChatResponse
 
-    def mock_process_request(request):
+    async def mock_process_request(request):
         return ChatResponse(
             message="Test response",
             thread_id=(
@@ -57,6 +57,46 @@ def override_agent(mock_agent: ChefAgentGraph):
     app.dependency_overrides[get_agent] = lambda: mock_agent
     yield
     app.dependency_overrides.clear()
+
+
+class TestModuleImports:
+    """Test that modules can be imported without errors."""
+
+    def test_chat_module_import_without_mocks(self):
+        """Test that chat module can be imported without mocks."""
+        # This test should run without the autouse fixture
+        import api.chat
+
+        # Test that required functions exist
+        assert hasattr(api.chat, "get_agent")
+        assert callable(api.chat.get_agent)
+
+        # Test that router is defined
+        assert hasattr(api.chat, "router")
+
+    def test_shopping_module_import_without_mocks(self):
+        """Test that shopping module can be imported without mocks."""
+        import api.shopping
+
+        # Test that required functions exist
+        assert hasattr(api.shopping, "serialize_shopping_list")
+        assert hasattr(api.shopping, "validate_thread_id")
+        assert hasattr(api.shopping, "shopping_repo")
+
+        # Test that router is defined
+        assert hasattr(api.shopping, "router")
+
+    def test_main_module_import_without_mocks(self):
+        """Test that main module can be imported without mocks."""
+        # This should work even without environment variables set
+        try:
+            import main
+
+            assert hasattr(main, "app")
+            assert hasattr(main, "db")
+        except EnvironmentError:
+            # This is expected if GROQ_API_KEY is not set
+            pass
 
 
 class TestHealthEndpoints:
@@ -108,7 +148,7 @@ class TestChatEndpoints:
         """Test successful message sending."""
 
         # Override the mock agent's process_request method
-        def mock_process_request(request):
+        async def mock_process_request(request):
             return ChatResponse(
                 message="I'd be happy to help you plan a meal!",
                 thread_id=request.thread_id,
@@ -335,15 +375,30 @@ class TestErrorHandling:
 
         assert response.status_code == 422
 
-    def test_missing_content_type(self, test_api_client, test_thread_id):
+    def test_missing_content_type(
+        self, test_api_client, test_thread_id, mock_agent
+    ):
         """Test handling of missing content type."""
+
+        # Override the mock agent's process_request method for this test
+        def mock_process_request(request):
+            return ChatResponse(
+                message="Test response",
+                thread_id=(
+                    request.thread_id
+                    if hasattr(request, "thread_id")
+                    else "test-thread"
+                ),
+            )
+
+        mock_agent.process_request = mock_process_request
+
+        # Test with missing content type header - send as form data instead of JSON
         response = test_api_client.post(
             "/api/v1/chat/message",
-            content='{"thread_id": "test", "message": "hello"}',
+            data={"thread_id": "test-thread", "message": "Hello"},
+            # No Content-Type header - will default to application/x-www-form-urlencoded
         )
 
-        response = test_api_client.get("/api/v1/chat/threads")
-        assert response.status_code in [
-            200,
-            500,
-        ]  # 500 if agent fails to initialize
+        # Should return 422 due to invalid content type for JSON endpoint
+        assert response.status_code == 422

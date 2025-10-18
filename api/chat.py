@@ -12,7 +12,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from adapters.i18n import translate
-from adapters.mcp.client import ChefAgentMCPClient
+from adapters.mcp.http_client import ChefAgentHTTPMCPClient
 from agent import ChefAgentGraph
 from agent.models import ChatRequest, ChatResponse, ErrorResponse
 
@@ -21,10 +21,43 @@ logger = logging.getLogger(__name__)
 # Create router
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
+# Global agent instance (will be initialized on startup)
+_agent: ChefAgentGraph = None
+
 
 def get_agent() -> ChefAgentGraph:
-    """Get ChefAgentGraph instance."""
-    return ChefAgentGraph()
+    """Get or create the agent instance."""
+    global _agent
+    if _agent is None:
+        try:
+            from config import settings
+
+            # Create MCP client
+            mcp_client = ChefAgentHTTPMCPClient()
+
+            # Determine LLM provider and API key
+            if settings.groq_api_key:
+                llm_provider = "groq"
+                api_key = settings.groq_api_key
+            elif getattr(settings, "openai_api_key", None):
+                llm_provider = "openai"
+                api_key = settings.openai_api_key
+            else:
+                llm_provider = "groq"  # Default to groq
+                api_key = "test-key"  # Will fail gracefully
+
+            _agent = ChefAgentGraph(
+                llm_provider=llm_provider,
+                api_key=api_key,
+                mcp_client=mcp_client,
+            )
+            logger.info("Chef Agent initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Chef Agent: {e}")
+            raise HTTPException(
+                status_code=500, detail="Failed to initialize Chef Agent"
+            )
+    return _agent
 
 
 @router.post("/", response_model=ChatResponse)
@@ -83,7 +116,8 @@ def get_agent() -> ChefAgentGraph:
         try:
             from config import settings
 
-            mcp_client = ChefAgentMCPClient()
+            # Create MCP client
+            mcp_client = ChefAgentHTTPMCPClient()
 
             # Determine LLM provider and API key
             if settings.groq_api_key:
@@ -133,7 +167,7 @@ async def send_message(
         logger.info(f"Processing message for thread {request.thread_id}")
 
         # Process the request through the agent
-        response = agent.process_request(request)
+        response = await agent.process_request(request)
 
         # Return the response directly (it's already a ChatResponse)
         return response
@@ -267,4 +301,146 @@ async def list_threads(
         logger.error(f"Error listing threads: {e}")
         raise HTTPException(
             status_code=500, detail="Failed to list threads. Please try again."
+        )
+
+
+@router.post("/test", response_model=Dict[str, str])
+async def test_chat():
+    """Simple test endpoint that doesn't use the agent."""
+    return {"message": "Test endpoint working!", "status": "success"}
+
+
+@router.post("/test-agent", response_model=Dict[str, str])
+async def test_agent():
+    """Test endpoint that tries to create agent without MCP client."""
+    try:
+        from adapters.llm import LLMFactory
+        from config import settings
+
+        # Test LLM creation
+        llm = LLMFactory.create_llm(
+            provider="groq",
+            api_key=settings.groq_api_key,
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+            max_tokens=2048,
+        )
+
+        return {
+            "message": "LLM created successfully!",
+            "status": "success",
+            "llm_type": str(type(llm)),
+        }
+    except Exception as e:
+        return {"message": f"Error creating LLM: {str(e)}", "status": "error"}
+
+
+@router.post("/test-agent-no-mcp", response_model=Dict[str, str])
+async def test_agent_no_mcp():
+    """Test endpoint that creates agent without MCP client."""
+    try:
+        from agent import ChefAgentGraph
+        from config import settings
+
+        # Create agent without MCP client
+        agent = ChefAgentGraph(
+            llm_provider="groq",
+            api_key=settings.groq_api_key,
+            mcp_client=None,  # No MCP client
+            model="llama-3.1-8b-instant",
+        )
+
+        return {
+            "message": "Agent created successfully without MCP!",
+            "status": "success",
+            "agent_type": str(type(agent)),
+            "tools_count": str(len(agent.tools)),
+        }
+    except Exception as e:
+        return {
+            "message": f"Error creating agent: {str(e)}",
+            "status": "error",
+        }
+
+
+@router.post("/test-simple-chat", response_model=Dict[str, str])
+async def test_simple_chat():
+    """Test simple chat without full agent."""
+    try:
+        from langchain_core.messages import HumanMessage
+
+        from adapters.llm import LLMFactory
+        from config import settings
+
+        # Create LLM
+        llm = LLMFactory.create_llm(
+            provider="groq",
+            api_key=settings.groq_api_key,
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+            max_tokens=2048,
+        )
+
+        # Simple chat
+        messages = [
+            HumanMessage(content="Hello! Can you help me with meal planning?")
+        ]
+        response = await llm.ainvoke(messages)
+
+        return {
+            "message": "Simple chat successful!",
+            "status": "success",
+            "response": (
+                response.content[:100] + "..."
+                if len(response.content) > 100
+                else response.content
+            ),
+        }
+    except Exception as e:
+        return {
+            "message": f"Error in simple chat: {str(e)}",
+            "status": "error",
+        }
+
+
+@router.post("/simple-chat", response_model=ChatResponse)
+async def simple_chat(request: ChatRequest):
+    """Simple chat endpoint that uses LLM directly."""
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from adapters.llm import LLMFactory
+        from config import settings
+
+        # Create LLM
+        llm = LLMFactory.create_llm(
+            provider="groq",
+            api_key=settings.groq_api_key,
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+            max_tokens=2048,
+        )
+
+        # Create messages
+        system_message = SystemMessage(
+            content=(
+                "You are a helpful chef assistant that helps with meal planning. "
+                "Respond to user requests about cooking, recipes, and meal planning. "
+                "Be friendly and helpful."
+            )
+        )
+        human_message = HumanMessage(content=request.message)
+        messages = [system_message, human_message]
+
+        # Get response
+        response = await llm.ainvoke(messages)
+
+        return ChatResponse(
+            message=response.content, thread_id=request.thread_id
+        )
+
+    except Exception as e:
+        return ChatResponse(
+            message=f"I apologize, but I encountered an error: {str(e)}",
+            thread_id=request.thread_id,
         )

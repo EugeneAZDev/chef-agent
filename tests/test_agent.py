@@ -371,17 +371,19 @@ class TestChefAgentGraph:
                 message=message, thread_id="test_thread", language="en"
             )
 
-            # Create a mock state object with messages attribute
+            # Create a mock state object that behaves like AddableValuesDict
             mock_state = Mock()
-            mock_state.messages = [
-                {"role": "user", "content": message},
-                {
-                    "role": "assistant",
-                    "content": (
-                        f"I understand you want {expected_diet} food."
-                    ),
-                },
-            ]
+            mock_state.get = Mock(
+                return_value=[
+                    {"role": "user", "content": message},
+                    {
+                        "role": "assistant",
+                        "content": (
+                            f"I understand you want {expected_diet} food."
+                        ),
+                    },
+                ]
+            )
 
             # Mock the graph.ainvoke method using AsyncMock
             with patch.object(
@@ -410,15 +412,17 @@ class TestChefAgentGraph:
             language="en",
         )
 
-        # Create a mock state object with messages attribute
+        # Create a mock state object that behaves like AddableValuesDict
         mock_state = Mock()
-        mock_state.messages = [
-            {"role": "user", "content": request.message},
-            {
-                "role": "assistant",
-                "content": "I'll create a vegetarian meal plan for you.",
-            },
-        ]
+        mock_state.get = Mock(
+            return_value=[
+                {"role": "user", "content": request.message},
+                {
+                    "role": "assistant",
+                    "content": "I'll create a vegetarian meal plan for you.",
+                },
+            ]
+        )
 
         with patch.object(
             mock_chef_agent.graph,
@@ -449,18 +453,20 @@ class TestChefAgentGraph:
             language="en",
         )
 
-        # Create a mock state object with messages attribute
+        # Create a mock state object that behaves like AddableValuesDict
         mock_state = Mock()
-        mock_state.messages = [
-            {"role": "user", "content": request.message},
-            {
-                "role": "assistant",
-                "content": (
-                    "I've replaced the breakfast recipe "
-                    "with a vegan option."
-                ),
-            },
-        ]
+        mock_state.get = Mock(
+            return_value=[
+                {"role": "user", "content": request.message},
+                {
+                    "role": "assistant",
+                    "content": (
+                        "I've replaced the breakfast recipe "
+                        "with a vegan option."
+                    ),
+                },
+            ]
+        )
 
         with patch.object(
             mock_chef_agent.graph,

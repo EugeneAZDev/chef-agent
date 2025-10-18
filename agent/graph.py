@@ -17,7 +17,7 @@ from langgraph.prebuilt import ToolNode
 
 from adapters.i18n import translate
 from adapters.llm import LLMFactory
-from adapters.mcp.client import ChefAgentMCPClient
+from adapters.mcp.http_client import ChefAgentHTTPMCPClient
 from agent.memory import MemoryManager
 from agent.models import (
     AgentState,
@@ -25,6 +25,7 @@ from agent.models import (
     ChatResponse,
     ConversationState,
 )
+from agent.simple_memory import SimpleMemorySaver
 from agent.tools import create_chef_tools
 from prompts import prompt_loader
 
@@ -36,7 +37,7 @@ class ChefAgentGraph:
         self,
         llm_provider: str,
         api_key: str,
-        mcp_client: ChefAgentMCPClient,
+        mcp_client: Optional[ChefAgentHTTPMCPClient] = None,
         model: Optional[str] = None,
     ):
         """Initialize the agent graph."""
@@ -44,6 +45,8 @@ class ChefAgentGraph:
         self.api_key = api_key
         self.mcp_client = mcp_client
         self.memory_manager = MemoryManager()
+        # Use simple memory saver for LangGraph compatibility
+        self.memory_manager.memory_saver = SimpleMemorySaver()
 
         # Initialize LLM using factory
         self.llm = LLMFactory.create_llm(
@@ -54,8 +57,11 @@ class ChefAgentGraph:
             max_tokens=2048,
         )
 
-        # Create tools
-        self.tools = create_chef_tools(mcp_client)
+        # Create tools (empty list if no MCP client)
+        if mcp_client:
+            self.tools = create_chef_tools(mcp_client)
+        else:
+            self.tools = []  # Empty tools list when no MCP client
         self.llm_with_tools = self.llm.bind_tools(self.tools)
 
         # Create tool node
@@ -1061,10 +1067,18 @@ class ChefAgentGraph:
             )
 
             # Extract response
+            # final_state can be AddableValuesDict, AgentState, or None
+            if final_state is None:
+                messages = []
+            elif hasattr(final_state, "get"):
+                messages = final_state.get("messages", [])
+            else:
+                messages = getattr(final_state, "messages", [])
+
             response_message = (
-                final_state.messages[-1]["content"]
-                if final_state.messages
-                else "I apologize, but I couldn't process your request."
+                messages[-1]["content"]
+                if messages
+                else "I apologize, but I encountered an error processing your request."
             )
 
             # Create response
@@ -1073,14 +1087,21 @@ class ChefAgentGraph:
             )
 
             # Add menu plan and shopping list if available
-            if hasattr(final_state, "menu_plan") and final_state.menu_plan:
-                response.menu_plan = final_state.menu_plan
+            if final_state is None:
+                menu_plan = None
+                shopping_list = None
+            elif hasattr(final_state, "get"):
+                menu_plan = final_state.get("menu_plan")
+                shopping_list = final_state.get("shopping_list")
+            else:
+                menu_plan = getattr(final_state, "menu_plan", None)
+                shopping_list = getattr(final_state, "shopping_list", None)
 
-            if (
-                hasattr(final_state, "shopping_list")
-                and final_state.shopping_list
-            ):
-                response.shopping_list = final_state.shopping_list
+            if menu_plan:
+                response.menu_plan = menu_plan
+
+            if shopping_list:
+                response.shopping_list = shopping_list
 
             return response
 

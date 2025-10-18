@@ -76,7 +76,8 @@ class LLMFactory:
             # Make import optional to avoid runtime errors
             raise ImportError(
                 "Could not import settings from config. "
-                "Please use create_llm() method with explicit parameters instead."
+                "Please use create_llm() method with explicit parameters "
+                "instead."
             )
 
         try:

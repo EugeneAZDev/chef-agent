@@ -617,10 +617,11 @@ class SQLiteRecipeRepository(RecipeRepository):
         )
 
         if diet_enum is None:
-            # Invalid diet_type in database - raise ValueError for proper validation
+            # Invalid diet_type in database - raise ValueError for validation
+            diet_values = [dt.value for dt in DietType]
             raise ValueError(
                 f"Invalid diet_type '{diet_type_str}' in database. "
-                f"Must be one of: {[dt.value for dt in DietType]}"
+                f"Must be one of: {diet_values}"
             )
 
         return diet_enum
