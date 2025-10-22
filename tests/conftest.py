@@ -113,15 +113,21 @@ def mock_mcp_client():
 def mock_chef_agent(mock_mcp_client):
     """Mock ChefAgentGraph for testing."""
     with patch("agent.graph.LLMFactory") as mock_factory:
+        # Create a simple mock LLM without AsyncMock
         mock_llm = Mock()
         mock_factory.create_llm.return_value = mock_llm
 
         # Create real ChefAgentGraph instance
         agent = ChefAgentGraph("groq", "test-api-key", mock_mcp_client)
 
-        # Mock the graph.ainvoke method
+        # Mock the graph.ainvoke method as a simple Mock
         agent.graph = Mock()
-        agent.graph.ainvoke = AsyncMock()
+
+        # Mock memory manager as simple Mock
+        agent.memory_manager = Mock()
+
+        # Ensure the agent has access to the mock_llm
+        agent.llm = mock_llm
 
         return agent
 

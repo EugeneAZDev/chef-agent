@@ -6,7 +6,7 @@ workflow execution, state transitions, and tool interactions.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -644,7 +644,7 @@ class TestAgentCallChain:
         with patch.object(
             mock_chef_agent.memory_manager,
             "load_conversation_state",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=Exception("Memory load error"),
         ):
             request = ChatRequest(

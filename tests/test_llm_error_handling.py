@@ -250,7 +250,7 @@ class TestAgentLLMErrorHandling:
         with patch.object(
             mock_chef_agent.llm,
             "ainvoke",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=Exception("LLM API Error"),
         ):
             request = ChatRequest(
@@ -271,7 +271,7 @@ class TestAgentLLMErrorHandling:
         with patch.object(
             mock_chef_agent.llm,
             "ainvoke",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=TimeoutError("Request timeout"),
         ):
             request = ChatRequest(
@@ -295,7 +295,7 @@ class TestAgentLLMErrorHandling:
         with patch.object(
             mock_chef_agent.llm,
             "ainvoke",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=Exception("Rate limit exceeded"),
         ):
             request = ChatRequest(
@@ -368,7 +368,7 @@ class TestAgentLLMErrorHandling:
         with patch.object(
             mock_chef_agent.memory_manager,
             "save_conversation_state",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=Exception("Memory save error"),
         ):
             request = ChatRequest(
@@ -451,7 +451,7 @@ class TestAgentLLMErrorHandling:
         with patch.object(
             mock_chef_agent.llm,
             "ainvoke",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=Exception("LLM returned null response"),
         ):
             request = ChatRequest(
@@ -581,7 +581,7 @@ class TestLLMErrorRecovery:
         with patch.object(
             mock_chef_agent.llm,
             "ainvoke",
-            new_callable=AsyncMock,
+            new_callable=Mock,
             side_effect=Exception("LLM failure"),
         ):
             request = ChatRequest(
