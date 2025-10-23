@@ -30,7 +30,31 @@ A sophisticated AI agent that helps you plan meals, manage shopping lists, and m
    make seed       # Load sample recipes
    ```
 
-4. **Run the application:**
+4. **Run the application in development mode:**
+   
+   **Terminal 1 - Kill existing processes and start Redis:**
+   ```bash
+   # Kill any existing processes on ports 8070 and 8072
+   lsof -ti:8072 | xargs kill -9 && pkill -f uvicorn && pkill -f http_server
+   
+   # Start Redis server
+   redis-server
+   ```
+   
+   **Terminal 2 - Start MCP HTTP Server:**
+   ```bash
+   # Start MCP HTTP server (adjust path to your project location)
+   PYTHONPATH=/home/eulw/projects/chef-ai/chef-agent poetry run python adapters/mcp/http_server.py
+   # Note: Replace /home/eulw/projects/chef-ai/chef-agent with your actual project path
+   ```
+   
+   **Terminal 3 - Start Main API Server:**
+   ```bash
+   # Start main FastAPI server with auto-reload
+   poetry run uvicorn main:app --host 0.0.0.0 --port 8070 --reload
+   ```
+   
+   **Alternative - Using make commands:**
    ```bash
    make dev        # Development mode with auto-reload
    # or
