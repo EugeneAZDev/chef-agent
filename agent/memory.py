@@ -48,19 +48,36 @@ class SQLiteMemorySaver:
         self, config: RunnableConfig, writes: List[Any], *args, **kwargs
     ) -> None:
         """Async put writes for LangGraph compatibility."""
-        thread_id = config.get("thread_id")
+        # Extract thread_id from configurable section
+        thread_id = None
+        if "configurable" in config and isinstance(config["configurable"], dict):
+            thread_id = config["configurable"].get("thread_id")
+        else:
+            thread_id = config.get("thread_id")
+            
         if thread_id and writes:
             # Store the last write using our existing put method
             await self.put(config, writes[-1] if writes else None)
+            print(f"DEBUG: SQLiteMemorySaver - saved state for thread {thread_id}")
 
     async def aget_tuple(self, config: RunnableConfig) -> Optional[tuple]:
         """Async get tuple for LangGraph compatibility."""
-        thread_id = config.get("thread_id")
+        # Extract thread_id from configurable section
+        thread_id = None
+        if "configurable" in config and isinstance(config["configurable"], dict):
+            thread_id = config["configurable"].get("thread_id")
+        else:
+            thread_id = config.get("thread_id")
+            
+        print(f"DEBUG: SQLiteMemorySaver - aget_tuple called for thread {thread_id}")
         if thread_id:
             # Try to get state from our existing get method
             state = await self.get(config)
             if state:
+                print(f"DEBUG: SQLiteMemorySaver - found state for thread {thread_id}: {state}")
+                # Return tuple with (state, version) format expected by LangGraph
                 return (state, self.get_next_version())
+        print(f"DEBUG: SQLiteMemorySaver - no state found for thread {thread_id}")
         return None
 
     def close(self) -> None:
@@ -130,7 +147,13 @@ class SQLiteMemorySaver:
 
     async def get(self, config: RunnableConfig) -> Optional[Dict[str, Any]]:
         """Get checkpoint for a thread."""
-        thread_id = config.get("thread_id")
+        # Extract thread_id from configurable section
+        thread_id = None
+        if "configurable" in config and isinstance(config["configurable"], dict):
+            thread_id = config["configurable"].get("thread_id")
+        else:
+            thread_id = config.get("thread_id")
+            
         if not thread_id:
             return None
 
@@ -151,8 +174,14 @@ class SQLiteMemorySaver:
 
             if row:
                 try:
-                    return json.loads(row["state_data"])
-                except (json.JSONDecodeError, KeyError):
+                    state_dict = json.loads(row["state_data"])
+                    # Convert dict back to AgentState if needed
+                    if isinstance(state_dict, dict) and "thread_id" in state_dict:
+                        from agent.models import AgentState
+                        return AgentState(**state_dict)
+                    return state_dict
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    print(f"DEBUG: SQLiteMemorySaver - error deserializing state: {e}")
                     return None
             return None
 
@@ -160,13 +189,26 @@ class SQLiteMemorySaver:
         self, config: RunnableConfig, checkpoint: Dict[str, Any]
     ) -> None:
         """Save checkpoint for a thread."""
-        thread_id = config.get("thread_id")
+        # Extract thread_id from configurable section
+        thread_id = None
+        if "configurable" in config and isinstance(config["configurable"], dict):
+            thread_id = config["configurable"].get("thread_id")
+        else:
+            thread_id = config.get("thread_id")
+            
         if not thread_id:
             return
 
         async with self._lock:
             conn = self._get_connection()
-            state_data = json.dumps(checkpoint)
+            
+            # Convert AgentState to dict if needed
+            if hasattr(checkpoint, 'dict'):
+                state_data = json.dumps(checkpoint.dict())
+            elif hasattr(checkpoint, 'model_dump'):
+                state_data = json.dumps(checkpoint.model_dump())
+            else:
+                state_data = json.dumps(checkpoint)
 
             import asyncio
 
@@ -184,6 +226,12 @@ class SQLiteMemorySaver:
                 ),
             )
             await loop.run_in_executor(None, conn.commit)
+
+    async def aput(
+        self, config: RunnableConfig, checkpoint: Dict[str, Any], *args, **kwargs
+    ) -> None:
+        """Async put checkpoint for a thread."""
+        await self.put(config, checkpoint)
 
     async def add_message(
         self, thread_id: str, role: str, content: str
@@ -342,6 +390,32 @@ class SQLiteMemorySaver:
     def close_connection(self) -> None:
         """Close database connection (alias for close method)."""
         self.close()
+
+    async def delete_thread(self, thread_id: str) -> None:
+        """Delete thread from memory."""
+        async with self._lock:
+            conn = self._get_connection()
+            import asyncio
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "DELETE FROM conversations WHERE thread_id = ?",
+                    (thread_id,),
+                ),
+            )
+            await loop.run_in_executor(None, conn.commit)
+
+    async def clear_thread(self, thread_id: str) -> None:
+        """Clear thread from memory."""
+        await self.delete_thread(thread_id)
+
+    def get_all_threads(self) -> List[Dict[str, Any]]:
+        """Get all thread IDs."""
+        conn = self._get_connection()
+        rows = conn.execute("SELECT thread_id FROM conversations").fetchall()
+        return [{"thread_id": row["thread_id"]} for row in rows]
 
 
 class MemoryManager:

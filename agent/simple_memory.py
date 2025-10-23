@@ -25,19 +25,37 @@ class SimpleMemorySaver:
 
     async def aget_tuple(self, config: RunnableConfig) -> Optional[tuple]:
         """Get tuple from memory."""
-        thread_id = config.get("thread_id")
+        # Extract thread_id from configurable section
+        thread_id = None
+        if "configurable" in config and isinstance(config["configurable"], dict):
+            thread_id = config["configurable"].get("thread_id")
+        else:
+            thread_id = config.get("thread_id")
+            уьз
+        print(f"DEBUG: SimpleMemorySaver - aget_tuple called for thread {thread_id}")
         if thread_id and thread_id in self._memory:
-            return (self._memory[thread_id], self.get_next_version(config))
+            state = self._memory[thread_id]
+            version = self.get_next_version(config)
+            print(f"DEBUG: SimpleMemorySaver - found state for thread {thread_id}: {state}")
+            return (state, version)
+        print(f"DEBUG: SimpleMemorySaver - no state found for thread {thread_id}")
         return None
 
     async def aput_writes(
         self, config: RunnableConfig, writes: List[Any], *args, **kwargs
     ) -> None:
         """Put writes to memory."""
-        thread_id = config.get("thread_id")
+        # Extract thread_id from configurable section
+        thread_id = None
+        if "configurable" in config and isinstance(config["configurable"], dict):
+            thread_id = config["configurable"].get("thread_id")
+        else:
+            thread_id = config.get("thread_id")
+            
         if thread_id and writes:
-            # Store the last write
+            # Store the last write (which should be the complete state)
             self._memory[thread_id] = writes[-1] if writes else None
+            print(f"DEBUG: SimpleMemorySaver - saved state for thread {thread_id}: {self._memory[thread_id]}")
 
     async def get(self, config: RunnableConfig) -> Optional[Dict[str, Any]]:
         """Get state from memory."""
