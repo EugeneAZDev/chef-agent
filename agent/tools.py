@@ -27,6 +27,7 @@ async def search_recipes(
     query: str = "",
     tags: Optional[List[str]] = None,
     diet_type: Optional[str] = None,
+    difficulty: Optional[str] = None,
     max_prep_time: Optional[int] = None,
     max_cook_time: Optional[int] = None,
     servings: Optional[int] = None,
@@ -39,6 +40,7 @@ async def search_recipes(
         query: Search query (keywords, ingredients, etc.)
         tags: List of recipe tags to filter by
         diet_type: Diet type filter (vegetarian, vegan, etc.)
+        difficulty: Difficulty level filter (easy, medium, hard)
         max_prep_time: Maximum preparation time in minutes
         max_cook_time: Maximum cooking time in minutes
         servings: Number of servings
@@ -58,7 +60,7 @@ async def search_recipes(
             recipe_repo = SQLiteRecipeRepository(db)
 
             print(
-                f"DEBUG: Searching recipes with diet_type='{diet_type}', user_id=None"
+                f"DEBUG: Searching recipes with diet_type='{diet_type}', difficulty='{difficulty}', user_id=None"
             )
 
             # Search recipes directly from database
@@ -66,7 +68,7 @@ async def search_recipes(
             recipes = recipe_repo.search_recipes(
                 query=query,
                 diet_type=diet_type,
-                difficulty=None,
+                difficulty=difficulty,
                 max_prep_time=max_prep_time,
                 limit=limit,
                 user_id=None,  # Search all recipes in fallback mode
@@ -75,8 +77,15 @@ async def search_recipes(
             print(f"DEBUG: Found {len(recipes)} recipes")
             for recipe in recipes:
                 print(
-                    f"DEBUG: Recipe: {recipe.title}, diet_type: {recipe.diet_type}"
+                    f"DEBUG: Recipe: {recipe.title}, diet_type: {recipe.diet_type}, difficulty: {recipe.difficulty}"
                 )
+            
+            # Debug: Check if recipes match the diet_type filter
+            if diet_type:
+                matching_recipes = [r for r in recipes if r.diet_type == diet_type]
+                print(f"DEBUG: Recipes matching diet_type '{diet_type}': {len(matching_recipes)}")
+                for recipe in matching_recipes:
+                    print(f"DEBUG: Matching recipe: {recipe.title}")
 
             # Apply additional filters
             if tags:
@@ -443,114 +452,89 @@ async def create_recipe(
     Returns:
         Dictionary containing created recipe data
     """
-    if not _mcp_client:
-        # Fallback to direct database access when MCP client is not available
-        try:
-            from adapters.db import Database
-            from adapters.db.recipe_repository import SQLiteRecipeRepository
-            from domain.entities import DietType, Ingredient, Recipe
-
-            db = Database()
-            recipe_repo = SQLiteRecipeRepository(db)
-
-            # Convert diet_type string to enum
-            diet_type_enum = None
-            if diet_type:
-                try:
-                    diet_type_enum = DietType(diet_type.lower())
-                except ValueError:
-                    # If diet_type is not valid, use None
-                    diet_type_enum = None
-
-            # Create ingredients list
-            ingredients_list = []
-            if ingredients:
-                for ing_data in ingredients:
-                    ingredient = Ingredient(
-                        name=ing_data.get("name", ""),
-                        quantity=ing_data.get("quantity", ""),
-                        unit=ing_data.get("unit", ""),
-                    )
-                    ingredients_list.append(ingredient)
-
-            # Create recipe object
-            recipe = Recipe(
-                id=None,
-                title=title,
-                description=description,
-                instructions=instructions,
-                prep_time_minutes=prep_time_minutes,
-                cook_time_minutes=cook_time_minutes,
-                servings=servings,
-                difficulty=difficulty,
-                tags=[],  # Empty tags for now
-                diet_type=diet_type_enum,
-                ingredients=ingredients_list,
-                user_id=user_id,
-            )
-
-            # Save recipe to database
-            created_recipe = recipe_repo.save(recipe)
-
-            return {
-                "success": True,
-                "recipe": {
-                    "id": created_recipe.id,
-                    "title": created_recipe.title,
-                    "description": created_recipe.description,
-                    "instructions": created_recipe.instructions,
-                    "prep_time_minutes": created_recipe.prep_time_minutes,
-                    "cook_time_minutes": created_recipe.cook_time_minutes,
-                    "servings": created_recipe.servings,
-                    "difficulty": created_recipe.difficulty,
-                    "diet_type": (
-                        created_recipe.diet_type.value
-                        if created_recipe.diet_type
-                        else None
-                    ),
-                    "ingredients": [
-                        {
-                            "name": ing.name,
-                            "quantity": ing.quantity,
-                            "unit": ing.unit,
-                        }
-                        for ing in created_recipe.ingredients
-                    ],
-                },
-                "message": f"Recipe '{title}' created successfully",
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Database fallback failed: {str(e)}",
-                "message": "Failed to create recipe",
-            }
-
+    # Always use direct database access for create_recipe
+    # MCP client doesn't have create_recipe method
     try:
-        # Use MCP client if available
-        result = await _mcp_client.create_recipe(
+        from adapters.db import Database
+        from adapters.db.recipe_repository import SQLiteRecipeRepository
+        from domain.entities import DietType, Ingredient, Recipe
+
+        db = Database()
+        recipe_repo = SQLiteRecipeRepository(db)
+
+        # Convert diet_type string to enum
+        diet_type_enum = None
+        if diet_type:
+            try:
+                diet_type_enum = DietType(diet_type.lower())
+            except ValueError:
+                # If diet_type is not valid, use None
+                diet_type_enum = None
+
+        # Create ingredients list
+        ingredients_list = []
+        if ingredients:
+            for ing_data in ingredients:
+                ingredient = Ingredient(
+                    name=ing_data.get("name", ""),
+                    quantity=ing_data.get("quantity", ""),
+                    unit=ing_data.get("unit", ""),
+                    )
+                ingredients_list.append(ingredient)
+
+        # Create recipe object
+        recipe = Recipe(
+            id=None,
             title=title,
             description=description,
             instructions=instructions,
-            diet_type=diet_type,
             prep_time_minutes=prep_time_minutes,
             cook_time_minutes=cook_time_minutes,
             servings=servings,
             difficulty=difficulty,
-            ingredients=ingredients,
+            tags=[],  # Empty tags for now
+            diet_type=diet_type_enum,
+            ingredients=ingredients_list,
             user_id=user_id,
         )
+
+        # Save recipe to database
+        created_recipe = recipe_repo.save(recipe)
+
         return {
             "success": True,
-            "recipe": result,
+            "recipe": {
+                "id": created_recipe.id,
+                "title": created_recipe.title,
+                "description": created_recipe.description,
+                "instructions": created_recipe.instructions,
+                "prep_time_minutes": created_recipe.prep_time_minutes,
+                "cook_time_minutes": created_recipe.cook_time_minutes,
+                "servings": created_recipe.servings,
+                "difficulty": created_recipe.difficulty,
+                "diet_type": (
+                    created_recipe.diet_type.value
+                    if created_recipe.diet_type
+                    else None
+                ),
+                "ingredients": [
+                    {
+                        "name": ing.name,
+                        "quantity": ing.quantity,
+                        "unit": ing.unit,
+                    }
+                    for ing in created_recipe.ingredients
+                ],
+            },
             "message": f"Recipe '{title}' created successfully",
         }
     except Exception as e:
         return {
             "success": False,
-            "error": str(e),
-            "message": f"Failed to create recipe: {str(e)}",
+            "error": f"Database fallback failed: {str(e)}",
+            "message": "Failed to create recipe",
         }
+
 
 
 @tool
@@ -684,58 +668,13 @@ async def create_fallback_recipes(
     Returns:
         Dictionary containing created recipes
     """
-    try:
-        from adapters.db import Database
-        from adapters.db.recipe_repository import SQLiteRecipeRepository
-        from domain.entities import DietType
-
-        db = Database()
-        recipe_repo = SQLiteRecipeRepository(db)
-
-        # Create fallback recipes
-        recipes = []
-        for i in range(limit):
-            recipe = Recipe(
-                id=None,
-                title=f"Fallback {diet_type.title()} Recipe {i+1}",
-                description=f"Auto-generated {diet_type} recipe",
-                instructions="Mix ingredients and cook according to your preferences.",
-                ingredients=[
-                    Ingredient(name="tomato", quantity="2", unit="pieces"),
-                    Ingredient(name="onion", quantity="1", unit="piece"),
-                    Ingredient(name="garlic", quantity="2", unit="cloves"),
-                ],
-                prep_time_minutes=10,
-                cook_time_minutes=20,
-                servings=2,
-                difficulty="easy",
-                tags=["fallback", diet_type],
-                diet_type=(
-                    DietType.VEGETARIAN
-                    if diet_type == "vegetarian"
-                    else DietType.OMNIVORE
-                ),
-                user_id="test-user",
-            )
-
-            # Save recipe to database
-            saved_recipe = recipe_repo.save(recipe)
-            recipes.append(saved_recipe)
-
-        return {
-            "success": True,
-            "recipes": recipes,
-            "total_found": len(recipes),
-            "message": f"Created {len(recipes)} fallback {diet_type} recipes",
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "recipes": [],
-            "total_found": 0,
-        }
+    return {
+        "success": False,
+        "error": "MCP client not available - cannot create recipes without proper recipe dataset",
+        "recipes": [],
+        "total_found": 0,
+        "message": "Please ensure MCP server is running for recipe access"
+    }
 
 
 def create_chef_tools(
