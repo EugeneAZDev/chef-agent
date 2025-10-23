@@ -26,7 +26,7 @@ def get_redis_client():
         try:
             import redis
 
-            _redis_client = redis.from_url(settings.REDIS_URL)
+            _redis_client = redis.from_url(settings.redis_url)
             # Test connection
             _redis_client.ping()
             logger.info("Redis client connected successfully")

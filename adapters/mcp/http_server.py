@@ -254,7 +254,7 @@ class ChefAgentHTTPMCPServer:
             """Health check endpoint."""
             return {"status": "healthy", "service": "chef-agent-mcp-server"}
 
-    def run(self, host: str = "localhost", port: int = 8002):
+    def run(self, host: str = "localhost", port: int = 8072):
         """Run the HTTP MCP server."""
         import uvicorn
 

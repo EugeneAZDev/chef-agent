@@ -15,7 +15,7 @@ class ChefAgentHTTPMCPClient:
     """HTTP client for Chef Agent MCP server."""
 
     def __init__(
-        self, base_url: str = "http://localhost:8002", timeout: int = 30
+        self, base_url: str = "http://localhost:8072", timeout: int = 30
     ):
         """Initialize the HTTP MCP client."""
         self.base_url = base_url
@@ -30,8 +30,10 @@ class ChefAgentHTTPMCPClient:
     async def find_recipes(
         self,
         query: str = "",
+        tags: Optional[List[str]] = None,
         diet_type: Optional[str] = None,
         max_prep_time: Optional[int] = None,
+        max_cook_time: Optional[int] = None,
         servings: Optional[int] = None,
         limit: int = 10,
     ) -> Dict[str, Any]:
@@ -39,8 +41,10 @@ class ChefAgentHTTPMCPClient:
         try:
             data = {
                 "query": query,
+                "tags": tags,
                 "diet_type": diet_type,
                 "max_prep_time": max_prep_time,
+                "max_cook_time": max_cook_time,
                 "servings": servings,
                 "limit": limit,
             }

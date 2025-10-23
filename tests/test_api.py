@@ -224,8 +224,8 @@ class TestChatEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["thread_id"] == test_thread_id
-        assert data["messages"] == messages
-        assert data["total_messages"] == 2
+        assert data["history"] == messages
+        assert data["message_count"] == 2
 
     @pytest.mark.asyncio
     async def test_clear_conversation_thread(

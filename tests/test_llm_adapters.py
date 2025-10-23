@@ -4,7 +4,7 @@ Tests for LLM adapters.
 This module contains unit tests for the LLM adapter functionality.
 """
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -19,25 +19,39 @@ class TestLLMFactory:
 
     def test_create_llm_groq(self):
         """Test creating Groq LLM adapter."""
-        result = LLMFactory.create_llm(
-            provider="groq", api_key="test-key", model="llama-3.1-8b-instant"
-        )
+        # Patch the ChatGroq class to avoid real API calls
+        with patch("adapters.llm.groq_adapter.ChatGroq"):
+            result = LLMFactory.create_llm(
+                provider="groq",
+                api_key="test-key",
+                model="llama-3.1-8b-instant",
+            )
 
-        assert isinstance(result, GroqAdapter)
+            assert isinstance(result, GroqAdapter)
+            assert result.api_key == "test-key"
+            assert result.model == "llama-3.1-8b-instant"
 
     def test_create_llm_openai(self):
         """Test creating OpenAI LLM adapter."""
-        result = LLMFactory.create_llm(
-            provider="openai", api_key="test-key", model="gpt-3.5-turbo"
-        )
+        # Patch the ChatOpenAI class to avoid real API calls
+        with patch("adapters.llm.openai_adapter.ChatOpenAI"):
+            result = LLMFactory.create_llm(
+                provider="openai", api_key="test-key", model="gpt-3.5-turbo"
+            )
 
-        assert isinstance(result, OpenAIAdapter)
+            assert isinstance(result, OpenAIAdapter)
+            assert result.api_key == "test-key"
+            assert result.model == "gpt-3.5-turbo"
 
     def test_create_llm_with_default_model(self):
         """Test creating LLM with default model."""
-        result = LLMFactory.create_llm(provider="groq", api_key="test-key")
+        # Patch the ChatGroq class to avoid real API calls
+        with patch("adapters.llm.groq_adapter.ChatGroq"):
+            result = LLMFactory.create_llm(provider="groq", api_key="test-key")
 
-        assert isinstance(result, GroqAdapter)
+            assert isinstance(result, GroqAdapter)
+            assert result.api_key == "test-key"
+            assert result.model == "llama-3.1-8b-instant"  # Default model
 
     def test_create_llm_unsupported_provider(self):
         """Test creating LLM with unsupported provider."""

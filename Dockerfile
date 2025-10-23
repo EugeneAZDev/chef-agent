@@ -35,11 +35,11 @@ RUN mkdir -p /app/data /app/migrations /app/locales && \
 USER chef
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8070
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8070/health || exit 1
 
 # Run migrations and start application
-CMD ["sh", "-c", "poetry run python -m scripts.migrate && poetry run uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "poetry run python -m scripts.migrate && poetry run uvicorn main:app --host 0.0.0.0 --port 8070"]

@@ -99,13 +99,25 @@ def mock_openai_adapter():
 def mock_mcp_client():
     """Mock MCP client for testing."""
     client = Mock(spec=ChefAgentMCPClient)
-    # Make MCP client methods async for testing
-    client.find_recipes = AsyncMock()
-    client.create_shopping_list = AsyncMock()
-    client.add_to_shopping_list = AsyncMock()
-    client.get_shopping_list = AsyncMock()
-    client.clear_shopping_list = AsyncMock()
-    client.manage_shopping_list = AsyncMock()
+    # Make MCP client methods async for testing and return proper values
+    client.find_recipes = AsyncMock(
+        return_value={"success": True, "recipes": [], "total_found": 0}
+    )
+    client.create_shopping_list = AsyncMock(
+        return_value={"success": True, "message": "Shopping list created"}
+    )
+    client.add_to_shopping_list = AsyncMock(
+        return_value={"success": True, "message": "Items added"}
+    )
+    client.get_shopping_list = AsyncMock(
+        return_value={"success": True, "items": []}
+    )
+    client.clear_shopping_list = AsyncMock(
+        return_value={"success": True, "message": "Shopping list cleared"}
+    )
+    client.manage_shopping_list = AsyncMock(
+        return_value={"success": True, "message": "Shopping list managed"}
+    )
     return client
 
 
@@ -130,6 +142,22 @@ def mock_chef_agent(mock_mcp_client):
         agent.llm = mock_llm
 
         return agent
+
+
+@pytest.fixture
+def mock_llm_factory():
+    """Mock LLM factory for tests that need it."""
+    with patch("adapters.llm.factory.LLMFactory.create_llm") as mock_factory:
+        # Create a mock LLM that returns a simple response
+        mock_llm = Mock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=Mock(content="Test response")
+        )
+
+        # Simple mock that returns mock_llm for all providers
+        mock_factory.return_value = mock_llm
+
+        yield mock_factory
 
 
 @pytest.fixture
@@ -262,3 +290,142 @@ def temp_db_with_cleanup():
     import os
 
     os.unlink(temp_db.name)
+
+
+@pytest.fixture(scope="session")
+def test_server():
+    """Start test server for integration tests."""
+    import os
+
+    from fastapi.testclient import TestClient
+
+    # Set test environment
+    os.environ["GROQ_API_KEY"] = "test-key"
+    os.environ["API_PORT"] = "8070"
+    os.environ["SQLITE_DB"] = "test_chef_agent.db"
+    os.environ["DATABASE_URL"] = "sqlite:///./test_chef_agent.db"
+
+    # Also set the database path for the Database class
+    import adapters.db.database
+
+    adapters.db.database.DEFAULT_DB_PATH = "test_chef_agent.db"
+
+    # Load test recipes into database
+    try:
+        from adapters.db import Database
+        from adapters.db.recipe_repository import SQLiteRecipeRepository
+        from domain.entities import DietType, Ingredient, Recipe
+
+        # Create test database with sample recipes
+        db = Database("test_chef_agent.db")
+        recipe_repo = SQLiteRecipeRepository(db)
+
+        # Load sample recipes
+        sample_recipes = [
+            Recipe(
+                id=None,
+                title="Vegetarian Buddha Bowl",
+                description="Nutritious and colorful vegetarian meal",
+                ingredients=[
+                    Ingredient(name="quinoa", quantity="1", unit="cup"),
+                    Ingredient(
+                        name="sweet potato", quantity="2", unit="pieces"
+                    ),
+                    Ingredient(name="chickpeas", quantity="1", unit="can"),
+                    Ingredient(name="avocado", quantity="1", unit="piece"),
+                    Ingredient(name="spinach", quantity="2", unit="cups"),
+                    Ingredient(name="tahini", quantity="3", unit="tbsp"),
+                ],
+                instructions=(
+                    "Cook quinoa. Roast sweet potato cubes. Mix all ingredients "
+                    "in a bowl. Drizzle with tahini dressing."
+                ),
+                prep_time_minutes=15,
+                cook_time_minutes=30,
+                servings=2,
+                difficulty="medium",
+                tags=["healthy", "lunch"],
+                diet_type=DietType.VEGETARIAN,
+                user_id="test-user",  # Add user_id for test recipes
+            ),
+            Recipe(
+                id=None,
+                title="Vegetarian Pasta",
+                description="Simple vegetarian pasta dish",
+                ingredients=[
+                    Ingredient(name="pasta", quantity="500", unit="g"),
+                    Ingredient(name="tomatoes", quantity="4", unit="pieces"),
+                    Ingredient(name="onion", quantity="1", unit="piece"),
+                    Ingredient(name="garlic", quantity="2", unit="cloves"),
+                    Ingredient(name="olive oil", quantity="3", unit="tbsp"),
+                ],
+                instructions=(
+                    "Cook pasta. Saute onions and garlic. Add tomatoes. "
+                    "Mix with pasta."
+                ),
+                prep_time_minutes=10,
+                cook_time_minutes=20,
+                servings=4,
+                difficulty="easy",
+                tags=["pasta", "dinner"],
+                diet_type=DietType.VEGETARIAN,
+                user_id="test-user",  # Add user_id for test recipes
+            ),
+        ]
+
+        # Save recipes to database
+        for recipe in sample_recipes:
+            recipe_repo.save(recipe)
+
+        db.close()
+
+    except Exception as e:
+        print(f"Warning: Could not load test recipes: {e}")
+
+    # Mock the agent creation to use fallback mode (no MCP client)
+    with patch("api.chat.get_agent") as mock_get_agent:
+        # Set the MCP client to None in the tools module to force fallback
+        import agent.tools
+        from agent import ChefAgentGraph
+
+        agent.tools._mcp_client = None
+
+        # Set the global agent to None to force recreation
+        import api.chat
+
+        api.chat._agent = None
+
+        # Create agent without MCP client to use fallback mode
+        test_agent = ChefAgentGraph(
+            llm_provider="groq",
+            api_key="test-key",
+            mcp_client=None,  # No MCP client = fallback mode
+        )
+
+        # Ensure the agent uses fallback tools
+        from langgraph.prebuilt import ToolNode
+
+        from agent.tools import create_chef_tools
+
+        test_agent.tools = create_chef_tools(None)
+        test_agent.llm_with_tools = test_agent.llm.bind_tools(test_agent.tools)
+        test_agent.tool_node = ToolNode(test_agent.tools)
+
+        # Also patch the global agent variable
+        api.chat._agent = test_agent
+        mock_get_agent.return_value = test_agent
+
+        # Import and create test client
+        from main import app
+
+        client = TestClient(app)
+
+        yield client
+
+
+@pytest.fixture(scope="session")
+def test_mcp_server():
+    """Mock MCP server for integration tests."""
+    # For now, we'll skip the real MCP server and use mocks
+    # This avoids the complexity of starting a real server
+    yield None

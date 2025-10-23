@@ -29,14 +29,14 @@ class Settings(BaseSettings):
 
     # MCP Server settings
     mcp_server_host: str = Field(default="localhost", alias="MCP_SERVER_HOST")
-    mcp_server_port: int = Field(default=8002, alias="MCP_SERVER_PORT")
+    mcp_server_port: int = Field(default=8072, alias="MCP_SERVER_PORT")
     mcp_server_url: str = Field(
-        default="http://localhost:8002", alias="MCP_SERVER_URL"
+        default="http://localhost:8072", alias="MCP_SERVER_URL"
     )
 
     # FastAPI settings
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
-    api_port: int = Field(default=8000, alias="API_PORT")
+    api_port: int = Field(default=8070, alias="API_PORT")
     api_reload: bool = Field(default=False, alias="API_RELOAD")
 
     # Redis settings

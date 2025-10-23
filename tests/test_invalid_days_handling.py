@@ -399,6 +399,15 @@ class TestEmptyRecipesHandling:
     @pytest.fixture
     def chef_agent(self, mock_mcp_client):
         """Create ChefAgentGraph instance for testing."""
+        # Clear database before each test
+        from adapters.db.database import Database
+
+        db = Database()
+        db.execute_update("DELETE FROM shopping_lists")
+        db.execute_update("DELETE FROM recipe_ingredients")
+        db.execute_update("DELETE FROM recipe_tags")
+        db.execute_update("DELETE FROM recipes")
+
         return ChefAgentGraph(
             llm_provider="groq",
             api_key="test-key",
@@ -426,20 +435,17 @@ class TestEmptyRecipesHandling:
         # Handle plan generation
         result_state = await chef_agent._handle_plan_generation(state)
 
-        # Should try broader search
+        # Should create recipes directly since we changed the logic
         assert result_state.recipe_search_attempts == 1
-        assert result_state.conversation_state == (
-            ConversationState.GENERATING_PLAN
-        )
-        assert len(result_state.tool_calls) == 1
-        assert result_state.tool_calls[0]["name"] == "search_recipes"
-        assert result_state.tool_calls[0]["args"]["limit"] == 50
+        assert result_state.conversation_state == ConversationState.COMPLETED
+        assert len(result_state.found_recipes) > 0  # Recipes were created
+        assert result_state.menu_plan is not None  # Meal plan was created
 
-        # Should have error message
-        assert len(result_state.messages) == 1
-        error_message = result_state.messages[0]["content"]
-        assert "couldn't find enough recipes" in error_message
-        assert "broader search" in error_message
+        # Should have messages about creating recipes
+        assert len(result_state.messages) >= 1
+        search_message = result_state.messages[0]["content"]
+        assert "searching for recipes" in search_message
+        assert "Please wait" in search_message
 
     @pytest.mark.asyncio
     async def test_empty_recipes_second_attempt(self, chef_agent):
@@ -461,21 +467,19 @@ class TestEmptyRecipesHandling:
         # Handle plan generation
         result_state = await chef_agent._handle_plan_generation(state)
 
-        # Should give up and complete conversation
+        # Should create recipes instead of giving up
         assert result_state.recipe_search_attempts == 2
         assert result_state.conversation_state == ConversationState.COMPLETED
-        assert result_state.error == (
-            "No recipes found after multiple search attempts"
-        )
-        assert len(result_state.tool_calls) == 0  # No more tool calls
+        assert result_state.error is None  # No error, recipes were created
+        assert len(result_state.found_recipes) > 0  # Recipes were created
+        assert result_state.menu_plan is not None  # Meal plan was created
 
-        # Should have final error message
-        assert len(result_state.messages) == 1
-        error_message = result_state.messages[0]["content"]
-        assert "I'm sorry" in error_message
-        assert "couldn't find any recipes" in error_message
-        assert "vegan meal plan" in error_message
-        assert "try a different diet goal" in error_message
+        # Should have success message about creating recipes
+        assert len(result_state.messages) == 2
+        search_message = result_state.messages[0]["content"]
+        success_message = result_state.messages[1]["content"]
+        assert "searching for recipes" in search_message
+        assert "custom recipes" in success_message
 
     @pytest.mark.asyncio
     async def test_successful_recipes_found(self, chef_agent):
@@ -514,8 +518,11 @@ class TestEmptyRecipesHandling:
         assert result_state.conversation_state == ConversationState.COMPLETED
         assert result_state.menu_plan is not None
         assert result_state.recipe_search_attempts == 0  # Not incremented
-        assert len(result_state.tool_calls) == 1
+        assert (
+            len(result_state.tool_calls) == 2
+        )  # create_shopping_list + add_to_shopping_list
         assert result_state.tool_calls[0]["name"] == "create_shopping_list"
+        assert result_state.tool_calls[1]["name"] == "add_to_shopping_list"
 
 
 class TestRecipeReplacementErrorHandling:

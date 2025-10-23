@@ -53,3 +53,12 @@ chef_agent.db
 # Environment variables
 .env.local
 .env.production
+
+# Test state tracking
+.test_state.json
+
+# Redis dump files
+dump.rdb
+
+# Empty test files
+pytest

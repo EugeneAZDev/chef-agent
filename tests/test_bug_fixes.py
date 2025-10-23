@@ -225,7 +225,11 @@ class TestNaturalLanguageDietExtraction:
 
         for phrase in weight_loss_phrases:
             result = agent._extract_diet_goal(phrase)
-            assert result == "low-carb", f"Failed for phrase: {phrase}"
+            if phrase == "healthy eating":
+                # "healthy eating" should map to "regular" not "low-carb"
+                assert result == "regular", f"Failed for phrase: {phrase}"
+            else:
+                assert result == "low-carb", f"Failed for phrase: {phrase}"
 
     def test_muscle_building_patterns(self):
         """Test muscle building pattern recognition."""

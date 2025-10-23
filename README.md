@@ -2,7 +2,7 @@
 
 A sophisticated AI agent that helps you plan meals, manage shopping lists, and make dietary decisions. Built with FastAPI, LangGraph, and modern security practices.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.13+
@@ -38,9 +38,9 @@ A sophisticated AI agent that helps you plan meals, manage shopping lists, and m
    ```
 
 5. **Access the API:**
-   - API: http://localhost:8000
-   - Docs: http://localhost:8000/docs
-   - Health: http://localhost:8000/health
+   - API: http://localhost:8070
+   - Docs: http://localhost:8070/docs
+   - Health: http://localhost:8070/health
 
 ### Docker Deployment
 
@@ -50,10 +50,10 @@ docker-compose up --build
 
 # Or run individual container
 docker build -t chef-agent .
-docker run -e GROQ_API_KEY=your_key -p 8000:8000 chef-agent
+docker run -e GROQ_API_KEY=your_key -p 8070:8070 chef-agent
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### Clean Architecture (DDD)
 ```
@@ -73,7 +73,7 @@ chef-agent/
 - **Security**: Rate limiting, CSRF, CSP, input validation
 - **Multi-language**: English, German, French support
 
-## 🛡️ Security Features
+## Security Features
 
 - **Rate Limiting**: 10 requests/minute per IP
 - **Security Headers**: CSP, HSTS, X-Frame-Options
@@ -81,7 +81,7 @@ chef-agent/
 - **Log Scrubbing**: Sensitive data protection
 - **Non-root Container**: Docker security best practices
 
-## 📊 API Endpoints
+## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -90,7 +90,7 @@ chef-agent/
 | GET | `/db/status` | Database status |
 | GET | `/docs` | Interactive API documentation |
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -103,7 +103,7 @@ poetry run pytest tests/test_domain_entities.py -v
 poetry run pytest --cov=. tests/
 ```
 
-## 🔧 Development Commands
+## Development Commands
 
 ```bash
 make install      # Install dependencies
@@ -117,7 +117,7 @@ make dev          # Start development server
 make run          # Start production server
 ```
 
-## 🌍 Environment Variables
+## Environment Variables
 
 Copy `.env.example` to `.env` and configure:
 
@@ -127,19 +127,19 @@ GROQ_API_KEY=your_groq_api_key_here
 
 # Optional (with defaults)
 MODEL_NAME=llama-3.1-8b-instant
-API_PORT=8000
+API_PORT=8070
 RATE_LIMIT_PER_MINUTE=10
 DEFAULT_LANGUAGE=en
 ```
 
-## 📈 Performance
+## Performance
 
 - **Response Time**: < 100ms for health checks
 - **Rate Limit**: 10 requests/minute per IP
 - **Database**: SQLite with proper indexing
 - **Memory**: ~50MB base usage
 
-## 🔒 Security Checklist
+## Security Checklist
 
 - [x] Rate limiting implemented
 - [x] Security headers (CSP, HSTS, etc.)
@@ -149,7 +149,7 @@ DEFAULT_LANGUAGE=en
 - [x] CORS properly configured
 - [x] SQL injection prevention
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### Docker Compose
 ```yaml
@@ -159,7 +159,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
     ports:
-      - "8000:8000"
+      - "8070:8070"
     volumes:
       - sqlite_data:/app/data
 ```
@@ -170,11 +170,11 @@ services:
 3. Set up reverse proxy (nginx/traefik)
 4. Enable HTTPS/TLS
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -182,6 +182,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 4. Add tests
 5. Submit a pull request
 
-## 📞 Support
+## Support
 
 For questions or issues, please open an issue in the repository.

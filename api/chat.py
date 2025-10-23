@@ -105,45 +105,6 @@ def validate_thread_id(thread_id: str) -> str:
     return thread_id
 
 
-# Global agent instance (will be initialized on startup)
-_agent: ChefAgentGraph = None
-
-
-def get_agent() -> ChefAgentGraph:
-    """Get or create the agent instance."""
-    global _agent
-    if _agent is None:
-        try:
-            from config import settings
-
-            # Create MCP client
-            mcp_client = ChefAgentHTTPMCPClient()
-
-            # Determine LLM provider and API key
-            if settings.groq_api_key:
-                llm_provider = "groq"
-                api_key = settings.groq_api_key
-            elif getattr(settings, "openai_api_key", None):
-                llm_provider = "openai"
-                api_key = settings.openai_api_key
-            else:
-                llm_provider = "groq"  # Default to groq
-                api_key = "test-key"  # Will fail gracefully
-
-            _agent = ChefAgentGraph(
-                llm_provider=llm_provider,
-                api_key=api_key,
-                mcp_client=mcp_client,
-            )
-            logger.info("Chef Agent initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Chef Agent: {e}")
-            raise HTTPException(
-                status_code=500, detail="Failed to initialize Chef Agent"
-            )
-    return _agent
-
-
 @router.post(
     "/message",
     response_model=ChatResponse,
@@ -198,121 +159,87 @@ async def get_conversation_history(
     Get the conversation history for a specific thread.
 
     Returns the complete conversation history including
-    all messages and context for the given thread.
+    all messages and tool calls for the thread.
     """
     try:
-        logger.info(f"Retrieving history for thread {thread_id}")
-
-        # Get conversation history from agent memory
-        logger.info(f"Calling get_conversation_history for thread {thread_id}")
-        logger.info(f"Agent type: {type(agent)}")
-        logger.info(f"Memory manager type: {type(agent.memory_manager)}")
-        logger.info(
-            f"get_conversation_history type: "
-            f"{type(agent.memory_manager.get_conversation_history)}"
-        )
+        # Get conversation history from memory
         history = await agent.memory_manager.get_conversation_history(
             thread_id
         )
-        logger.info(f"Got history: {history}")
+
+        if not history:
+            raise HTTPException(status_code=404, detail="Thread not found")
+
+        # Handle both list and dict responses
+        if isinstance(history, list):
+            messages = history
+        else:
+            messages = history.get("messages", [])
 
         return {
             "thread_id": thread_id,
-            "messages": history,
-            "total_messages": len(history) if history else 0,
+            "history": messages,
+            "message_count": len(messages),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error retrieving conversation history: {e}")
+        logger.error(f"Error getting conversation history: {e}")
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Failed to retrieve conversation history. " "Please try again."
-            ),
+            detail="Failed to retrieve conversation history",
         )
 
 
-@router.delete(
-    "/threads/{thread_id}",
-    response_model=Dict[str, str],
-    responses={
-        404: {"model": ErrorResponse, "description": "Thread not found"},
-        500: {"model": ErrorResponse, "description": "Internal Server Error"},
-    },
-    summary="Clear conversation thread",
-    description="Clear all messages and context for a specific thread",
-)
-async def clear_conversation_thread(
-    thread_id: str = Depends(validate_thread_id),
-    agent: ChefAgentGraph = Depends(get_agent),
-) -> Dict[str, str]:
+@router.post("/simple-chat", response_model=ChatResponse)
+async def simple_chat(request: ChatRequest) -> ChatResponse:
     """
-    Clear the conversation thread.
+    Simple chat endpoint that provides basic responses without full agent.
 
-    Removes all messages and context for the specified thread,
-    effectively starting a fresh conversation.
+    This endpoint is useful for testing basic functionality
+    without the complexity of the full agent workflow.
     """
     try:
-        logger.info(f"Clearing thread {thread_id}")
+        from adapters.llm import LLMFactory
+        from config import settings
 
-        # Clear the conversation thread
-        await agent.memory_manager.clear_conversation(thread_id)
+        # Create a simple LLM instance
+        llm = LLMFactory.create_llm(
+            provider="groq",
+            api_key=settings.groq_api_key,
+            temperature=0.7,
+            max_tokens=2048,
+        )
 
-        return {
-            "message": f"Thread {thread_id} cleared successfully",
-            "thread_id": thread_id,
-        }
+        # Create a simple prompt
+        prompt = f"""You are a helpful cooking assistant.
+        The user said: "{request.message}"
+
+        Please provide helpful cooking advice, recipe suggestions,
+        or meal planning tips based on their request.
+
+        Be friendly and informative in your response."""
+
+        # Get response from LLM
+        response = await llm.ainvoke(prompt)
+
+        return ChatResponse(
+            message=response.content,
+            thread_id=request.thread_id,
+        )
 
     except Exception as e:
-        logger.error(f"Error clearing conversation thread: {e}")
+        logger.error(f"Error in simple chat: {e}")
         raise HTTPException(
             status_code=500,
-            detail="Failed to clear conversation thread. Please try again.",
+            detail="Failed to process simple chat request",
         )
-
-
-@router.get(
-    "/threads",
-    response_model=Dict[str, Any],
-    summary="List active threads",
-    description="Get a list of all active conversation threads",
-)
-async def list_threads(
-    agent: ChefAgentGraph = Depends(get_agent),
-) -> Dict[str, Any]:
-    """
-    List all active conversation threads.
-
-    Returns a list of thread IDs and basic information
-    about each active conversation.
-    """
-    try:
-        logger.info("Listing active threads")
-
-        # Get all threads from memory manager
-        threads = agent.memory_manager.memory_saver.get_all_threads()
-
-        return {
-            "threads": threads,
-            "total_threads": len(threads) if threads else 0,
-        }
-
-    except Exception as e:
-        logger.error(f"Error listing threads: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to list threads. Please try again."
-        )
-
-
-@router.post("/test", response_model=Dict[str, str])
-async def test_chat():
-    """Simple test endpoint that doesn't use the agent."""
-    return {"message": "Test endpoint working!", "status": "success"}
 
 
 @router.post("/test-agent", response_model=Dict[str, str])
 async def test_agent():
-    """Test endpoint that tries to create agent without MCP client."""
+    """Test endpoint to verify agent initialization."""
     try:
         from adapters.llm import LLMFactory
         from config import settings
@@ -321,7 +248,6 @@ async def test_agent():
         llm = LLMFactory.create_llm(
             provider="groq",
             api_key=settings.groq_api_key,
-            model="llama-3.1-8b-instant",
             temperature=0.7,
             max_tokens=2048,
         )
@@ -331,6 +257,7 @@ async def test_agent():
             "status": "success",
             "llm_type": str(type(llm)),
         }
+
     except Exception as e:
         return {"message": f"Error creating LLM: {str(e)}", "status": "error"}
 
@@ -367,8 +294,6 @@ async def test_agent_no_mcp():
 async def test_simple_chat():
     """Test simple chat without full agent."""
     try:
-        from langchain_core.messages import HumanMessage
-
         from adapters.llm import LLMFactory
         from config import settings
 
@@ -376,71 +301,94 @@ async def test_simple_chat():
         llm = LLMFactory.create_llm(
             provider="groq",
             api_key=settings.groq_api_key,
-            model="llama-3.1-8b-instant",
             temperature=0.7,
             max_tokens=2048,
         )
 
-        # Simple chat
-        messages = [
-            HumanMessage(content="Hello! Can you help me with meal planning?")
-        ]
-        response = await llm.ainvoke(messages)
+        # Test simple prompt
+        prompt = "Hello! Can you help me with cooking?"
+        response = await llm.ainvoke(prompt)
 
         return {
-            "message": "Simple chat successful!",
+            "message": "Simple chat test successful!",
             "status": "success",
-            "response": (
-                response.content[:100] + "..."
-                if len(response.content) > 100
-                else response.content
-            ),
+            "response": response.content[:100] + "...",
         }
+
     except Exception as e:
         return {
-            "message": f"Error in simple chat: {str(e)}",
+            "message": f"Error in simple chat test: {str(e)}",
             "status": "error",
         }
 
 
-@router.post("/simple-chat", response_model=ChatResponse)
-async def simple_chat(request: ChatRequest):
-    """Simple chat endpoint that uses LLM directly."""
+@router.get(
+    "/threads",
+    response_model=Dict[str, Any],
+    responses={
+        500: {"model": ErrorResponse, "description": "Internal Server Error"},
+    },
+    summary="List all chat threads",
+    description="Retrieve a list of all chat threads with metadata",
+)
+async def list_threads(
+    agent: ChefAgentGraph = Depends(get_agent),
+) -> Dict[str, Any]:
+    """
+    List all chat threads.
+
+    Returns a summary of all chat threads including
+    thread_id, creation time, and message count.
+    """
     try:
-        from langchain_core.messages import HumanMessage, SystemMessage
+        # Get all threads from memory
+        threads = agent.memory_manager.memory_saver.get_all_threads()
 
-        from adapters.llm import LLMFactory
-        from config import settings
-
-        # Create LLM
-        llm = LLMFactory.create_llm(
-            provider="groq",
-            api_key=settings.groq_api_key,
-            model="llama-3.1-8b-instant",
-            temperature=0.7,
-            max_tokens=2048,
-        )
-
-        # Create messages
-        system_message = SystemMessage(
-            content=(
-                "You are a helpful chef assistant that helps with meal planning. "
-                "Respond to user requests about cooking, recipes, and meal planning. "
-                "Be friendly and helpful."
-            )
-        )
-        human_message = HumanMessage(content=request.message)
-        messages = [system_message, human_message]
-
-        # Get response
-        response = await llm.ainvoke(messages)
-
-        return ChatResponse(
-            message=response.content, thread_id=request.thread_id
-        )
+        return {
+            "threads": threads,
+            "total_threads": len(threads),
+        }
 
     except Exception as e:
-        return ChatResponse(
-            message=f"I apologize, but I encountered an error: {str(e)}",
-            thread_id=request.thread_id,
+        logger.error(f"Error listing threads: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve threads",
+        )
+
+
+@router.delete(
+    "/threads/{thread_id}",
+    response_model=Dict[str, str],
+    responses={
+        404: {"model": ErrorResponse, "description": "Thread not found"},
+        500: {"model": ErrorResponse, "description": "Internal Server Error"},
+    },
+    summary="Clear conversation thread",
+    description="Clear all messages from a specific thread",
+)
+async def clear_conversation_thread(
+    thread_id: str = Depends(validate_thread_id),
+    agent: ChefAgentGraph = Depends(get_agent),
+) -> Dict[str, str]:
+    """
+    Clear all messages from a specific thread.
+
+    This endpoint removes all conversation history
+    for the specified thread.
+    """
+    try:
+        # Clear conversation from memory
+        await agent.memory_manager.clear_conversation(thread_id)
+
+        return {
+            "message": f"Thread {thread_id} cleared successfully",
+            "thread_id": thread_id,
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing conversation: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to clear conversation",
         )

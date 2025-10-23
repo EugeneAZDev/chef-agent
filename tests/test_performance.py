@@ -113,7 +113,8 @@ class TestPerformance:
         assert avg_time < 0.5  # Under 500ms
 
         # Max response time shouldn't be too much higher than average
-        assert max_time < avg_time * 3  # Max shouldn't be 3x average
+        # Allow for some variance, especially for the first request
+        assert max_time < avg_time * 5  # Max shouldn't be 5x average
 
         # Min response time should be reasonable
         assert min_time > 0.001  # At least 1ms

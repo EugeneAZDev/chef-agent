@@ -197,6 +197,17 @@ async def create_recipe(recipe_data: RecipeCreate) -> Dict[str, Any]:
     try:
         logger.info("Creating new recipe")
 
+        # Convert diet_type string to enum if provided
+        diet_type_enum = None
+        if recipe_data.diet_type:
+            try:
+                diet_type_enum = DietType(recipe_data.diet_type)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid diet type: {recipe_data.diet_type}",
+                )
+
         # Create recipe object (id will be assigned by repository)
         recipe = Recipe(
             id=None,  # Will be assigned by repository
@@ -207,7 +218,7 @@ async def create_recipe(recipe_data: RecipeCreate) -> Dict[str, Any]:
             cook_time_minutes=recipe_data.cook_time_minutes,
             servings=recipe_data.servings,
             difficulty=recipe_data.difficulty,
-            diet_type=recipe_data.diet_type,
+            diet_type=diet_type_enum,
             user_id=recipe_data.user_id,
         )
 

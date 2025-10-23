@@ -1,6 +1,6 @@
 # Chef Agent Makefile
 
-.PHONY: help test test-fast test-integration test-security test-performance test-all install dev lint format clean
+.PHONY: help test test-fast test-integration test-security test-performance test-all test-smart test-reset test-status install dev lint format clean
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -30,6 +30,15 @@ test-performance: ## Run performance tests (slow)
 test-all: ## Run all tests including performance
 	poetry run pytest tests/ -v
 
+test-smart: ## Run tests with smart failed test tracking
+	python scripts/test_runner.py run
+
+test-reset: ## Reset test state to run all tests
+	python scripts/test_runner.py reset
+
+test-status: ## Show current test status
+	python scripts/test_runner.py status
+
 lint: ## Run linting
 	poetry run flake8 .
 	poetry run black --check .
@@ -49,10 +58,10 @@ clean: ## Clean up temporary files
 	rm -rf htmlcov
 
 run: ## Run the application
-	poetry run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+	poetry run uvicorn main:app --host 0.0.0.0 --port 8070 --reload
 
 run-prod: ## Run the application in production mode
-	poetry run uvicorn main:app --host 0.0.0.0 --port 8000
+	poetry run uvicorn main:app --host 0.0.0.0 --port 8070
 
 check: lint test ## Run linting and tests
 

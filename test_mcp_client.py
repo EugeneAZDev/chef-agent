@@ -21,7 +21,7 @@ async def test_mcp_client():
     try:
         # Test health check
         print("1. Testing health check...")
-        response = await client.client.get("http://localhost:8002/health")
+        response = await client.client.get("http://localhost:8072/health")
         print(f"Health check: {response.status_code} - {response.json()}")
 
         # Test recipe finder

@@ -4,7 +4,7 @@ Tests for critical bug fixes and edge cases.
 This module tests the fixes for the critical bugs identified in the codebase.
 """
 
-from unittest.mock import Mock
+# Mock is not used in this file
 
 import pytest
 
@@ -125,16 +125,21 @@ class TestEmptyRecipeHandling:
 
     @pytest.mark.asyncio
     async def test_agent_handles_empty_recipe_error(self):
-        """Test that agent properly handles empty recipe list error."""
-        from adapters.mcp.client import ChefAgentMCPClient
+        """Test that agent properly handles empty recipe list by creating recipes."""
+        # Clear database before test to avoid conflicts
+        from adapters.db.database import Database
         from agent import ChefAgentGraph
 
-        # Mock MCP client
-        mock_mcp = Mock(spec=ChefAgentMCPClient)
+        db = Database()
+        db.execute_update("DELETE FROM shopping_lists")
+        db.execute_update("DELETE FROM recipe_ingredients")
+        db.execute_update("DELETE FROM recipe_tags")
+        db.execute_update("DELETE FROM recipes")
+        db.close()
 
-        # Create agent
+        # Create agent in fallback mode (no MCP client)
         agent = ChefAgentGraph(
-            llm_provider="groq", api_key="test_key", mcp_client=mock_mcp
+            llm_provider="groq", api_key="test_key", mcp_client=None
         )
 
         # Create state with empty recipes but in the right state
@@ -144,19 +149,18 @@ class TestEmptyRecipeHandling:
             diet_goal="vegetarian",
             days_count=3,
             conversation_state=ConversationState.GENERATING_PLAN,
-            recipe_search_attempts=2,  # Force it to go to error state
+            recipe_search_attempts=2,  # Force it to go to creation state
         )
 
         # Test plan generation with empty recipes
         result_state = await agent._handle_plan_generation(state)
-        # Should either have error or be in completed state with error message
-        assert result_state.error is not None or (
-            result_state.conversation_state == ConversationState.COMPLETED
-            and any(
-                "couldn't find any recipes" in msg.get("content", "")
-                for msg in result_state.messages
-            )
-        )
+
+        # Agent should create recipes and complete successfully
+        assert result_state.conversation_state == ConversationState.COMPLETED
+        assert result_state.found_recipes is not None
+        assert len(result_state.found_recipes) > 0
+        assert result_state.menu_plan is not None
+        assert result_state.shopping_list is not None
 
 
 class TestDaysValidation:

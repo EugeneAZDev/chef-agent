@@ -100,14 +100,14 @@ class TestServerStartup:
             "SQLITE_DB": ":memory:",
             "REDIS_URL": "redis://localhost:6379",
             "API_HOST": "0.0.0.0",
-            "API_PORT": "8002",
+            "API_PORT": "8072",
             "RATE_LIMIT_PER_MINUTE": "20",
             "DEFAULT_LANGUAGE": "ru",
         }
 
         with patch.dict(os.environ, test_env, clear=True):
             # Test that environment variables are set correctly
-            assert os.environ.get("API_PORT") == "8002"
+            assert os.environ.get("API_PORT") == "8072"
             assert os.environ.get("API_HOST") == "0.0.0.0"
             assert os.environ.get("RATE_LIMIT_PER_MINUTE") == "20"
             assert os.environ.get("DEFAULT_LANGUAGE") == "ru"
