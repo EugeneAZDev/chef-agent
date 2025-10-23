@@ -1,0 +1,215 @@
+[
+  {
+    "id": 1,
+    "title": "Greek Yogurt Protein Bowl",
+    "description": "A creamy and protein-rich breakfast bowl with fresh berries and nuts",
+    "instructions": "Mix Greek yogurt with honey and vanilla. Top with fresh berries, granola, and chopped nuts. Serve immediately.",
+    "ingredients": [
+      {"name": "Greek yogurt", "quantity": "1", "unit": "cup"},
+      {"name": "honey", "quantity": "2", "unit": "tbsp"},
+      {"name": "mixed berries", "quantity": "1/2", "unit": "cup"},
+      {"name": "almonds", "quantity": "2", "unit": "tbsp"},
+      {"name": "granola", "quantity": "1/4", "unit": "cup"}
+    ],
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "servings": 1,
+    "difficulty": "easy",
+    "diet_type": "high-protein",
+    "tags": ["breakfast", "protein", "healthy"]
+  },
+  {
+    "id": 2,
+    "title": "Grilled Chicken Quinoa Salad",
+    "description": "A hearty and nutritious salad perfect for lunch or dinner",
+    "instructions": "Cook quinoa according to package instructions. Grill chicken breast and slice. Mix quinoa with vegetables, add chicken, and dress with lemon vinaigrette.",
+    "ingredients": [
+      {"name": "chicken breast", "quantity": "200", "unit": "g"},
+      {"name": "quinoa", "quantity": "1", "unit": "cup"},
+      {"name": "cucumber", "quantity": "1", "unit": "piece"},
+      {"name": "cherry tomatoes", "quantity": "1/2", "unit": "cup"},
+      {"name": "feta cheese", "quantity": "50", "unit": "g"},
+      {"name": "olive oil", "quantity": "2", "unit": "tbsp"},
+      {"name": "lemon juice", "quantity": "1", "unit": "tbsp"}
+    ],
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "servings": 2,
+    "difficulty": "medium",
+    "diet_type": "high-protein",
+    "tags": ["lunch", "dinner", "protein", "quinoa"]
+  },
+  {
+    "id": 3,
+    "title": "Salmon with Sweet Potato",
+    "description": "A delicious and healthy dinner with omega-3 rich salmon",
+    "instructions": "Season salmon with herbs and bake at 200°C for 15 minutes. Roast sweet potato cubes with olive oil and rosemary for 25 minutes.",
+    "ingredients": [
+      {"name": "salmon fillet", "quantity": "200", "unit": "g"},
+      {"name": "sweet potato", "quantity": "2", "unit": "pieces"},
+      {"name": "olive oil", "quantity": "2", "unit": "tbsp"},
+      {"name": "rosemary", "quantity": "1", "unit": "tsp"},
+      {"name": "lemon", "quantity": "1", "unit": "piece"},
+      {"name": "salt", "quantity": "1", "unit": "tsp"},
+      {"name": "black pepper", "quantity": "1/2", "unit": "tsp"}
+    ],
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 25,
+    "servings": 2,
+    "difficulty": "easy",
+    "diet_type": "high-protein",
+    "tags": ["dinner", "salmon", "omega-3", "healthy"]
+  },
+  {
+    "id": 4,
+    "title": "Protein Smoothie Bowl",
+    "description": "A refreshing and protein-packed smoothie bowl",
+    "instructions": "Blend protein powder with frozen fruits and almond milk. Pour into bowl and top with fresh fruits, nuts, and seeds.",
+    "ingredients": [
+      {"name": "protein powder", "quantity": "1", "unit": "scoop"},
+      {"name": "frozen banana", "quantity": "1", "unit": "piece"},
+      {"name": "frozen berries", "quantity": "1/2", "unit": "cup"},
+      {"name": "almond milk", "quantity": "1", "unit": "cup"},
+      {"name": "chia seeds", "quantity": "1", "unit": "tbsp"},
+      {"name": "walnuts", "quantity": "1", "unit": "tbsp"},
+      {"name": "coconut flakes", "quantity": "1", "unit": "tbsp"}
+    ],
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "servings": 1,
+    "difficulty": "easy",
+    "diet_type": "high-protein",
+    "tags": ["breakfast", "smoothie", "protein", "quick"]
+  },
+  {
+    "id": 5,
+    "title": "Turkey and Vegetable Stir Fry",
+    "description": "A quick and healthy stir fry with lean turkey and colorful vegetables",
+    "instructions": "Cut turkey into strips and stir fry with vegetables in a hot wok. Add soy sauce and ginger for flavor. Serve over brown rice.",
+    "ingredients": [
+      {"name": "ground turkey", "quantity": "300", "unit": "g"},
+      {"name": "bell peppers", "quantity": "2", "unit": "pieces"},
+      {"name": "broccoli", "quantity": "1", "unit": "head"},
+      {"name": "soy sauce", "quantity": "3", "unit": "tbsp"},
+      {"name": "ginger", "quantity": "1", "unit": "tbsp"},
+      {"name": "garlic", "quantity": "2", "unit": "cloves"},
+      {"name": "brown rice", "quantity": "1", "unit": "cup"},
+      {"name": "sesame oil", "quantity": "1", "unit": "tbsp"}
+    ],
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "servings": 2,
+    "difficulty": "easy",
+    "diet_type": "high-protein",
+    "tags": ["dinner", "stir-fry", "turkey", "quick"]
+  },
+  {
+    "id": 6,
+    "title": "Mediterranean Quinoa Bowl",
+    "description": "A colorful and nutritious bowl inspired by Mediterranean cuisine",
+    "instructions": "Cook quinoa and let cool. Mix with chopped vegetables, olives, and feta cheese. Dress with olive oil and lemon juice.",
+    "ingredients": [
+      {"name": "quinoa", "quantity": "1", "unit": "cup"},
+      {"name": "cucumber", "quantity": "1", "unit": "piece"},
+      {"name": "cherry tomatoes", "quantity": "1", "unit": "cup"},
+      {"name": "kalamata olives", "quantity": "1/4", "unit": "cup"},
+      {"name": "feta cheese", "quantity": "100", "unit": "g"},
+      {"name": "red onion", "quantity": "1/2", "unit": "piece"},
+      {"name": "olive oil", "quantity": "3", "unit": "tbsp"},
+      {"name": "lemon juice", "quantity": "2", "unit": "tbsp"}
+    ],
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "servings": 2,
+    "difficulty": "easy",
+    "diet_type": "vegetarian",
+    "tags": ["lunch", "dinner", "mediterranean", "quinoa"]
+  },
+  {
+    "id": 7,
+    "title": "Creamy Mushroom Risotto",
+    "description": "A rich and creamy Italian rice dish with wild mushrooms",
+    "instructions": "Sauté mushrooms and onions. Add rice and wine, then gradually add warm broth while stirring. Finish with parmesan and butter.",
+    "ingredients": [
+      {"name": "arborio rice", "quantity": "1", "unit": "cup"},
+      {"name": "mixed mushrooms", "quantity": "300", "unit": "g"},
+      {"name": "onion", "quantity": "1", "unit": "piece"},
+      {"name": "white wine", "quantity": "1/2", "unit": "cup"},
+      {"name": "parmesan cheese", "quantity": "50", "unit": "g"},
+      {"name": "vegetable broth", "quantity": "4", "unit": "cups"},
+      {"name": "butter", "quantity": "2", "unit": "tbsp"},
+      {"name": "thyme", "quantity": "1", "unit": "tsp"}
+    ],
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 30,
+    "servings": 2,
+    "difficulty": "medium",
+    "diet_type": "vegetarian",
+    "tags": ["dinner", "risotto", "mushrooms", "italian"]
+  },
+  {
+    "id": 8,
+    "title": "Roasted Vegetable Pasta",
+    "description": "A hearty pasta dish with roasted seasonal vegetables",
+    "instructions": "Roast vegetables in the oven. Cook pasta al dente. Toss pasta with roasted vegetables, olive oil, and herbs.",
+    "ingredients": [
+      {"name": "pasta", "quantity": "300", "unit": "g"},
+      {"name": "zucchini", "quantity": "2", "unit": "pieces"},
+      {"name": "eggplant", "quantity": "1", "unit": "piece"},
+      {"name": "bell peppers", "quantity": "2", "unit": "pieces"},
+      {"name": "olive oil", "quantity": "3", "unit": "tbsp"},
+      {"name": "garlic", "quantity": "3", "unit": "cloves"},
+      {"name": "basil", "quantity": "1/4", "unit": "cup"},
+      {"name": "parmesan cheese", "quantity": "30", "unit": "g"}
+    ],
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "servings": 2,
+    "difficulty": "easy",
+    "diet_type": "vegetarian",
+    "tags": ["dinner", "pasta", "vegetables", "italian"]
+  },
+  {
+    "id": 9,
+    "title": "Avocado Toast with Eggs",
+    "description": "A simple and satisfying breakfast with healthy fats and protein",
+    "instructions": "Toast bread and mash avocado with lemon juice. Fry eggs to preference. Top toast with avocado and eggs.",
+    "ingredients": [
+      {"name": "whole grain bread", "quantity": "2", "unit": "slices"},
+      {"name": "avocado", "quantity": "1", "unit": "piece"},
+      {"name": "eggs", "quantity": "2", "unit": "pieces"},
+      {"name": "lemon juice", "quantity": "1", "unit": "tbsp"},
+      {"name": "salt", "quantity": "1", "unit": "pinch"},
+      {"name": "black pepper", "quantity": "1", "unit": "pinch"},
+      {"name": "red pepper flakes", "quantity": "1", "unit": "pinch"}
+    ],
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 5,
+    "servings": 1,
+    "difficulty": "easy",
+    "diet_type": "high-protein",
+    "tags": ["breakfast", "avocado", "eggs", "quick"]
+  },
+  {
+    "id": 10,
+    "title": "Lentil Curry",
+    "description": "A warming and protein-rich curry with aromatic spices",
+    "instructions": "Sauté onions and spices. Add lentils and coconut milk. Simmer until lentils are tender. Serve with rice.",
+    "ingredients": [
+      {"name": "red lentils", "quantity": "1", "unit": "cup"},
+      {"name": "coconut milk", "quantity": "1", "unit": "can"},
+      {"name": "onion", "quantity": "1", "unit": "piece"},
+      {"name": "garlic", "quantity": "3", "unit": "cloves"},
+      {"name": "ginger", "quantity": "1", "unit": "tbsp"},
+      {"name": "curry powder", "quantity": "2", "unit": "tbsp"},
+      {"name": "tomatoes", "quantity": "2", "unit": "pieces"},
+      {"name": "basmati rice", "quantity": "1", "unit": "cup"}
+    ],
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 25,
+    "servings": 2,
+    "difficulty": "easy",
+    "diet_type": "vegetarian",
+    "tags": ["dinner", "curry", "lentils", "spicy"]
+  }
+]
