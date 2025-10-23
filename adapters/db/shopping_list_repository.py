@@ -473,9 +473,23 @@ class SQLiteShoppingListRepository(ShoppingListRepository):
             INSERT INTO shopping_lists (thread_id, user_id, items)
             VALUES (?, ?, ?)
         """
-        list_id = self.db.execute_insert(
-            query, (thread_id, user_id, items_data)
-        )
+        try:
+            list_id = self.db.execute_insert(
+                query, (thread_id, user_id, items_data)
+            )
+        except Exception as e:
+            if "UNIQUE constraint failed" in str(e):
+                # If unique constraint failed, try to get existing list
+                existing_lists = self.get_by_thread_id(thread_id, user_id)
+                if existing_lists:
+                    if isinstance(existing_lists, list) and len(existing_lists) > 0:
+                        return existing_lists[0]
+                    elif existing_lists:
+                        return existing_lists
+                raise ValueError(
+                    f"Shopping list already exists for thread {thread_id} and user {user_id}"
+                )
+            raise e
 
         # Check for integer overflow (SQLite max is 2^63-1)
         if list_id > 2**63 - 1:

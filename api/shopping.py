@@ -167,8 +167,8 @@ async def get_shopping_lists(
 @router.post(
     "/lists",
     response_model=Dict[str, Any],
-    summary="Create shopping list",
-    description="Create a new shopping list for a thread",
+    summary="Create or get shopping list",
+    description="Create a new shopping list for a thread or return existing one",
 )
 async def create_shopping_list(
     thread_id: str = Depends(validate_thread_id),
@@ -178,14 +178,35 @@ async def create_shopping_list(
     ),
 ) -> Dict[str, Any]:
     """
-    Create a new shopping list.
+    Create a new shopping list or return existing one.
 
-    Creates a new shopping list for the specified thread.
+    Creates a new shopping list for the specified thread, or returns
+    the existing one if it already exists.
     """
     try:
-        logger.info(f"Creating shopping list for thread: {thread_id}")
+        logger.info(f"Creating or getting shopping list for thread: {thread_id}")
 
-        # Create shopping list
+        # First, try to get existing lists for this thread and user
+        existing_lists = shopping_repo.get_by_thread_id(thread_id, user_id)
+        
+        # If we have existing lists, return the first one
+        if existing_lists:
+            if isinstance(existing_lists, list) and len(existing_lists) > 0:
+                existing_list = existing_lists[0]
+            elif existing_lists:
+                existing_list = existing_lists
+            else:
+                existing_list = None
+                
+            if existing_list:
+                logger.info(f"Returning existing shopping list: {existing_list.id}")
+                return {
+                    "list": serialize_shopping_list(existing_list),
+                    "status": "existing",
+                    "message": "Existing shopping list returned",
+                }
+
+        # No existing list found, create a new one
         shopping_list = ShoppingList(items=[], user_id=user_id)
         if name:
             shopping_list.name = name
