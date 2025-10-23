@@ -6,6 +6,7 @@ with nodes for planning, tool execution, and response generation.
 """
 
 import asyncio
+import re
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
@@ -26,9 +27,9 @@ from agent.models import (
     ConversationState,
 )
 from agent.simple_memory import SimpleMemorySaver
+from langgraph.checkpoint.memory import MemorySaver
 from agent.tools import create_chef_tools
 from prompts import prompt_loader
-
 
 class ChefAgentGraph:
     """Main LangGraph agent for the Chef Agent."""
@@ -45,15 +46,15 @@ class ChefAgentGraph:
         self.api_key = api_key
         self.mcp_client = mcp_client
         self.memory_manager = MemoryManager()
-        # Use simple memory saver for LangGraph compatibility
-        self.memory_manager.memory_saver = SimpleMemorySaver()
+        # Use built-in MemorySaver from LangGraph
+        self.memory_manager.memory_saver = MemorySaver()
 
         # Initialize LLM using factory
         self.llm = LLMFactory.create_llm(
             provider=llm_provider,
             api_key=api_key,
             model=model,
-            temperature=0.7,
+            temperature=0.9,  # Increased for more creative responses
             max_tokens=2048,
         )
 
@@ -98,6 +99,10 @@ class ChefAgentGraph:
         try:
             # Extract user input
             user_message = self._extract_user_input(state)
+            print(f"DEBUG: _planner_node - user_message: '{user_message}'")
+            print(f"DEBUG: _planner_node - conversation_state: {state.conversation_state}")
+            print(f"DEBUG: _planner_node - diet_goal: {state.diet_goal}")
+            print(f"DEBUG: _planner_node - days_count: {state.days_count}")
 
             # Process based on current conversation state
             if state.conversation_state == ConversationState.INITIAL:
@@ -111,8 +116,52 @@ class ChefAgentGraph:
             ):
                 return await self._handle_days_input(state, user_message)
             elif state.conversation_state == ConversationState.GENERATING_PLAN:
-                print("Calling _handle_plan_generation")
-                return await self._handle_plan_generation(state)
+                # Check if user is asking about recipes during plan generation
+                difficulty = self._extract_difficulty_level(user_message)
+                diet_goal = self._extract_diet_goal(user_message)
+                
+                if difficulty:
+                    # User is asking about recipes by difficulty level
+                    state.difficulty = difficulty
+                    state.add_message(
+                        {
+                            "role": "assistant",
+                            "content": f"Great! I'll search for {difficulty} recipes for you."
+                        }
+                    )
+                    # Trigger recipe search by difficulty
+                    state.tool_calls = [
+                        {
+                            "name": "search_recipes",
+                            "args": {"difficulty": difficulty, "limit": 20},
+                        }
+                    ]
+                    return state
+                elif diet_goal:
+                    # User is asking about recipes by diet type
+                    state.diet_goal = diet_goal
+                    state.add_message(
+                        {
+                            "role": "assistant",
+                            "content": f"Great! I'll search for {diet_goal} recipes for you."
+                        }
+                    )
+                    # Trigger recipe search by diet
+                    state.tool_calls = [
+                        {
+                            "name": "search_recipes",
+                            "args": {"diet_type": diet_goal, "limit": 20},
+                        }
+                    ]
+                    return state
+                else:
+                    # If we have tool_calls to execute, don't call _handle_plan_generation yet
+                    if state.tool_calls:
+                        print(f"DEBUG: _planner_node - have tool_calls to execute: {state.tool_calls}")
+                        return state
+                    else:
+                        print("DEBUG: Calling _handle_plan_generation")
+                        return await self._handle_plan_generation(state)
             elif (
                 state.conversation_state
                 == ConversationState.WAITING_FOR_RECIPE_REPLACEMENT
@@ -173,6 +222,26 @@ class ChefAgentGraph:
         self, state: AgentState, user_message: str
     ) -> AgentState:
         """Handle initial conversation state - ask about diet goals."""
+        # Check if user is asking for recipes by difficulty level
+        difficulty = self._extract_difficulty_level(user_message)
+        if difficulty:
+            state.difficulty = difficulty
+            state.conversation_state = ConversationState.GENERATING_PLAN
+            state.add_message(
+                {
+                    "role": "assistant",
+                    "content": f"Great! I'll search for {difficulty} recipes for you."
+                }
+            )
+            # Trigger recipe search by difficulty
+            state.tool_calls = [
+                {
+                    "name": "search_recipes",
+                    "args": {"difficulty": difficulty, "limit": 20},
+                }
+            ]
+            return state
+        
         # Check if user already provided diet information
         diet_goal = self._extract_diet_goal(user_message)
         if diet_goal:
@@ -227,6 +296,8 @@ class ChefAgentGraph:
     ) -> AgentState:
         """Handle diet goal input."""
         diet_goal = self._extract_diet_goal(user_message)
+        difficulty = self._extract_difficulty_level(user_message)
+        
         if diet_goal:
             state.diet_goal = diet_goal
             state.conversation_state = ConversationState.WAITING_FOR_DAYS
@@ -240,6 +311,23 @@ class ChefAgentGraph:
                     ),
                 }
             )
+        elif difficulty:
+            # User is asking for recipes by difficulty level
+            state.difficulty = difficulty
+            state.conversation_state = ConversationState.GENERATING_PLAN
+            state.add_message(
+                {
+                    "role": "assistant",
+                    "content": f"Great! I'll search for {difficulty} recipes for you."
+                }
+            )
+            # Trigger recipe search by difficulty
+            state.tool_calls = [
+                {
+                    "name": "search_recipes",
+                    "args": {"difficulty": difficulty, "limit": 20},
+                }
+            ]
         else:
             state.add_message(
                 {
@@ -258,7 +346,12 @@ class ChefAgentGraph:
         self, state: AgentState, user_message: str
     ) -> AgentState:
         """Handle days count input."""
+        print(f"DEBUG: _handle_days_input called with message: '{user_message}'")
+        print(f"DEBUG: Current conversation state: {state.conversation_state}")
+        print(f"DEBUG: Current diet_goal: {state.diet_goal}")
+        
         days_count, is_valid = self._extract_days_count(user_message)
+        print(f"DEBUG: Extracted days_count: {days_count}, is_valid: {is_valid}")
 
         if days_count is not None and is_valid:
             # Valid number in range 3-7
@@ -281,6 +374,10 @@ class ChefAgentGraph:
                     "args": {"diet_type": state.diet_goal, "limit": 20},
                 }
             ]
+            print(f"DEBUG: _handle_days_input - set tool_calls: {state.tool_calls}")
+            print(f"DEBUG: _handle_days_input - conversation_state: {state.conversation_state}")
+            print(f"DEBUG: Set tool_calls: {state.tool_calls}")
+            print(f"DEBUG: Set conversation_state to: {state.conversation_state}")
         elif days_count is not None and not is_valid:
             # Found a number but it's not in valid range
             if days_count < 3:
@@ -414,7 +511,9 @@ class ChefAgentGraph:
                 return state
 
         # If no recipes found, create them directly
-        if not state.found_recipes:
+        print(f"DEBUG: Checking recipe creation - found_recipes: {len(state.found_recipes) if state.found_recipes else 0}, search_attempts: {state.recipe_search_attempts}")
+        if not state.found_recipes or len(state.found_recipes) == 0:
+            print(f"DEBUG: No recipes found, checking search attempts: {state.recipe_search_attempts}")
             if state.recipe_search_attempts < 2:
                 state.recipe_search_attempts += 1
 
@@ -459,19 +558,22 @@ class ChefAgentGraph:
                             result
                             and result.get("success")
                             and result.get("recipes")
+                            and len(result["recipes"]) > 0
                         ):
                             state.found_recipes = result["recipes"]
                             print(f"Found {len(state.found_recipes)} recipes")
                         else:
                             print("No recipes found, will create them")
+                            state.found_recipes = []  # Ensure it's empty
                             # Don't increment here, just proceed to creation
                 except Exception as e:
                     print(f"Search failed: {e}")
                     state.recipe_search_attempts = 2  # Skip to creation
 
             # If still no recipes after search attempts, create them
-            if not state.found_recipes and state.recipe_search_attempts >= 1:
-                print("Creating custom recipes...")
+            print(f"DEBUG: Checking recipe creation condition - found_recipes: {len(state.found_recipes) if state.found_recipes else 0}, search_attempts: {state.recipe_search_attempts}")
+            if (not state.found_recipes or len(state.found_recipes) == 0) and state.recipe_search_attempts >= 1:
+                print("DEBUG: Creating custom recipes with LLM...")
                 state.add_message(
                     {
                         "role": "assistant",
@@ -483,111 +585,137 @@ class ChefAgentGraph:
                     }
                 )
 
-                # Create custom recipes for the meal plan
+                # Create custom recipes using LLM
                 state.tool_calls = []
-                # Create 6-9 base recipes that can be used across all days
-                import time
-
-                timestamp = int(time.time())
-                base_recipes = [
-                    (
-                        f"Vegetarian Breakfast Bowl {timestamp}",
-                        "A nutritious vegetarian breakfast with grains and vegetables",
-                    ),
-                    (
-                        f"Vegetarian Lunch Salad {timestamp}",
-                        "A fresh and healthy vegetarian salad",
-                    ),
-                    (
-                        f"Vegetarian Dinner Pasta {timestamp}",
-                        "A hearty vegetarian pasta dish",
-                    ),
-                    (
-                        f"Vegetarian Soup {timestamp}",
-                        "A warming vegetarian soup",
-                    ),
-                    (
-                        f"Vegetarian Stir Fry {timestamp}",
-                        "A quick and easy vegetarian stir fry",
-                    ),
-                    (
-                        f"Vegetarian Curry {timestamp}",
-                        "A flavorful vegetarian curry",
-                    ),
-                    (
-                        f"Vegetarian Sandwich {timestamp}",
-                        "A satisfying vegetarian sandwich",
-                    ),
-                    (
-                        f"Vegetarian Wrap {timestamp}",
-                        "A healthy vegetarian wrap",
-                    ),
-                    (
-                        f"Vegetarian Smoothie {timestamp}",
-                        "A refreshing vegetarian smoothie",
-                    ),
-                ]
-
-                for i, (title, description) in enumerate(
-                    base_recipes[:6]
-                ):  # Use first 6 recipes
-                    recipe_instructions = (
-                        f"Prepare this delicious {state.diet_goal} dish "
-                        f"following standard cooking methods"
-                    )
-
-                    # Create basic ingredients based on diet type
-                    ingredients = []
-                    if state.diet_goal.lower() in ["vegetarian", "vegan"]:
-                        ingredients = [
-                            {
-                                "name": "vegetables",
-                                "quantity": "200",
-                                "unit": "g",
-                            },
-                            {"name": "grains", "quantity": "100", "unit": "g"},
-                            {"name": "herbs", "quantity": "1", "unit": "tbsp"},
-                        ]
-                    elif state.diet_goal.lower() in ["low-carb", "keto"]:
-                        ingredients = [
-                            {
-                                "name": "protein",
-                                "quantity": "150",
-                                "unit": "g",
-                            },
-                            {
-                                "name": "vegetables",
-                                "quantity": "100",
-                                "unit": "g",
-                            },
-                            {
-                                "name": "healthy fats",
-                                "quantity": "2",
-                                "unit": "tbsp",
-                            },
-                        ]
+                
+                try:
+                    # Generate recipes using LLM
+                    recipe_generation_prompt = f"""
+                    Create 6 diverse {state.diet_goal} recipes for a meal plan.
+                    Include breakfast, lunch, dinner, and snack options.
+                    
+                    For each recipe, provide:
+                    - Title
+                    - Description
+                    - Detailed cooking instructions
+                    - Ingredients with quantities and units
+                    - Preparation time in minutes
+                    - Cooking time in minutes
+                    - Number of servings (2-4)
+                    - Difficulty level (easy, medium, hard)
+                    - Relevant tags
+                    
+                    Format as JSON array:
+                    [
+                        {{
+                            "title": "Recipe Title",
+                            "description": "Recipe description",
+                            "instructions": "Step-by-step instructions",
+                            "ingredients": [
+                                {{"name": "ingredient", "quantity": "amount", "unit": "unit"}}
+                            ],
+                            "prep_time_minutes": 15,
+                            "cook_time_minutes": 30,
+                            "servings": 4,
+                            "difficulty": "easy",
+                            "tags": ["tag1", "tag2"]
+                        }}
+                    ]
+                    """
+                    
+                    response = await self.llm.ainvoke(recipe_generation_prompt)
+                    
+                    # Parse LLM response
+                    import json
+                    import re
+                    
+                    # Extract JSON from response
+                    json_match = re.search(r'\[.*\]', response.content, re.DOTALL)
+                    if json_match:
+                        recipes_data = json.loads(json_match.group())
                     else:
-                        ingredients = [
-                            {
-                                "name": "main ingredient",
-                                "quantity": "200",
-                                "unit": "g",
+                        # Fallback: try to parse the entire response
+                        recipes_data = json.loads(response.content)
+                    
+                    # Create tool calls for each recipe
+                    for recipe_data in recipes_data[:6]:  # Limit to 6 recipes
+                        state.tool_calls.append({
+                            "name": "create_recipe",
+                            "args": {
+                                "title": recipe_data["title"],
+                                "description": recipe_data["description"],
+                                "instructions": recipe_data["instructions"],
+                                "diet_type": state.diet_goal,
+                                "prep_time_minutes": recipe_data.get("prep_time_minutes"),
+                                "cook_time_minutes": recipe_data.get("cook_time_minutes"),
+                                "servings": recipe_data.get("servings"),
+                                "difficulty": recipe_data.get("difficulty"),
+                                "ingredients": recipe_data.get("ingredients", []),
+                                "user_id": "test_user",
                             },
-                            {
-                                "name": "seasoning",
-                                "quantity": "1",
-                                "unit": "tsp",
-                            },
-                            {"name": "oil", "quantity": "1", "unit": "tbsp"},
-                        ]
-
-                    state.tool_calls.append(
-                        {
+                        })
+                        
+                except Exception as e:
+                    print(f"Error in LLM recipe generation: {e}")
+                    # Fallback to basic recipes if LLM fails
+                    import time
+                    timestamp = int(time.time())
+                    
+                    base_recipes = [
+                        (
+                            f"{state.diet_goal.title()} Breakfast {timestamp}",
+                            f"A nutritious {state.diet_goal} breakfast",
+                        ),
+                        (
+                            f"{state.diet_goal.title()} Lunch {timestamp}",
+                            f"A healthy {state.diet_goal} lunch",
+                        ),
+                        (
+                            f"{state.diet_goal.title()} Dinner {timestamp}",
+                            f"A satisfying {state.diet_goal} dinner",
+                        ),
+                        (
+                            f"{state.diet_goal.title()} Snack {timestamp}",
+                            f"A quick {state.diet_goal} snack",
+                        ),
+                        (
+                            f"{state.diet_goal.title()} Soup {timestamp}",
+                            f"A warming {state.diet_goal} soup",
+                        ),
+                        (
+                            f"{state.diet_goal.title()} Salad {timestamp}",
+                            f"A fresh {state.diet_goal} salad",
+                        ),
+                    ]
+                    
+                    for title, description in base_recipes:
+                        # Create basic ingredients based on diet type
+                        ingredients = []
+                        if state.diet_goal.lower() in ["vegetarian", "vegan"]:
+                            ingredients = [
+                                {"name": "vegetables", "quantity": "200", "unit": "g"},
+                                {"name": "grains", "quantity": "100", "unit": "g"},
+                                {"name": "herbs", "quantity": "1", "unit": "tbsp"},
+                            ]
+                        elif state.diet_goal.lower() in ["low-carb", "keto"]:
+                            ingredients = [
+                                {"name": "protein", "quantity": "150", "unit": "g"},
+                                {"name": "vegetables", "quantity": "100", "unit": "g"},
+                                {"name": "healthy fats", "quantity": "2", "unit": "tbsp"},
+                            ]
+                        else:
+                            ingredients = [
+                                {"name": "main ingredient", "quantity": "200", "unit": "g"},
+                                {"name": "seasoning", "quantity": "1", "unit": "tsp"},
+                                {"name": "oil", "quantity": "1", "unit": "tbsp"},
+                            ]
+                        
+                        state.tool_calls.append({
                             "name": "create_recipe",
                             "args": {
                                 "title": title,
                                 "description": description,
-                                "instructions": recipe_instructions,
+                                "instructions": f"Prepare this delicious {state.diet_goal} dish following standard cooking methods",
                                 "diet_type": state.diet_goal,
                                 "prep_time_minutes": 15,
                                 "cook_time_minutes": 20,
@@ -596,8 +724,7 @@ class ChefAgentGraph:
                                 "ingredients": ingredients,
                                 "user_id": "test_user",
                             },
-                        }
-                    )
+                        })
 
                 print(
                     f"Created {len(state.tool_calls)} recipe creation tool calls"
@@ -1218,7 +1345,8 @@ class ChefAgentGraph:
         """
         import re
 
-        message_lower = message.lower()
+        message_lower = message.lower().strip()
+        print(f"DEBUG: Extracting days from message: '{message}' -> '{message_lower}'")
 
         # Natural language patterns for days
         day_patterns = {
@@ -1238,6 +1366,7 @@ class ChefAgentGraph:
         # Check for natural language patterns first
         for pattern, days in day_patterns.items():
             if pattern in message_lower:
+                print(f"DEBUG: Found natural language pattern '{pattern}' -> {days} days")
                 return days, True
 
         # Look for numbers in the message with context
@@ -1257,6 +1386,7 @@ class ChefAgentGraph:
             matches = re.findall(pattern, message_lower)
             if matches:
                 num = int(matches[0])
+                print(f"DEBUG: Found context pattern '{pattern}' -> {num}")
                 if 3 <= num <= 7:
                     return num, True
                 elif num < 3:
@@ -1268,15 +1398,51 @@ class ChefAgentGraph:
 
         # Fallback: look for any numbers in the message
         numbers = re.findall(r"\b(\d+)\b", message)
+        print(f"DEBUG: Found numbers in message: {numbers}")
 
         # First, try to find a valid number in range 3-7
         for num_str in numbers:
             num = int(num_str)
+            print(f"DEBUG: Checking number {num} (3 <= {num} <= 7: {3 <= num <= 7})")
             if 3 <= num <= 7:
+                print(f"DEBUG: Valid number found: {num}")
                 return num, True
 
+        print("DEBUG: No valid number found")
         # If no valid number found, return None instead of first invalid number
         return None, False
+
+    def _extract_difficulty_level(self, message: str) -> Optional[str]:
+        """Extract difficulty level from user message."""
+        message_lower = message.lower()
+        
+        # Difficulty level patterns (phrases and single words)
+        difficulty_patterns = {
+            "easy": [
+                "easy", "simple", "quick", "fast", "beginner", "basic",
+                "easy recipes", "simple recipes", "easy level", "simple level",
+                "do we have easy", "what about easy", "show me easy",
+                "легко", "просто", "быстро", "начинающий"
+            ],
+            "medium": [
+                "medium", "moderate", "intermediate", "average",
+                "medium recipes", "moderate recipes", "medium level", "moderate level",
+                "do we have medium", "what about medium", "show me medium",
+                "средне", "умеренно", "средний"
+            ],
+            "hard": [
+                "hard", "difficult", "advanced", "complex", "challenging",
+                "hard recipes", "difficult recipes", "hard level", "difficult level",
+                "do we have hard", "what about hard", "show me hard", "recipes with hard",
+                "сложно", "трудно", "продвинутый", "сложный"
+            ]
+        }
+        
+        for difficulty, patterns in difficulty_patterns.items():
+            if any(pattern in message_lower for pattern in patterns):
+                return difficulty
+                
+        return None
 
     def _prepare_llm_messages(self, user_message: str, language: str) -> list:
         """Prepare messages for LLM including system prompt."""
@@ -1315,8 +1481,66 @@ class ChefAgentGraph:
             # Clear tool calls if no new ones provided
             state.tool_calls = []
 
+    def _sanitize_llm_json(self, text: str) -> str:
+        """
+        1. Remove/replace Unicode symbols that break JSON.
+        2. Return valid JSON array string.
+        """
+        import re  # Add this import
+        
+        # 1. Replace fancy quotes, dashes, degree, fractions
+        replacements = {
+            "–": "-",
+            "—": "-",
+            "°": "deg",
+            "¼": "0.25",
+            "½": "0.5",
+            "¾": "0.75",
+            "⅓": "0.33",
+            "⅔": "0.66",
+            '"': '\"',   # escape inner quotes
+        }
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
+
+        # 2. Remove control characters
+        text = re.sub(r'[\x00-\x1f\x7f]', ' ', text)
+
+        # 3. Ensure we return only the JSON array part
+        match = re.search(r'\[.*\]', text, flags=re.DOTALL)
+        if not match:
+            raise ValueError("No JSON array found in LLM response")
+        return match.group(0)
+
+    def _parse_individual_recipes(self, json_str: str) -> list:
+        """Parse individual recipes from malformed JSON string"""
+        recipes = []
+        try:
+            # Try to find individual recipe objects
+            recipe_pattern = r'\{[^{}]*"title"[^{}]*\}'
+            recipe_matches = re.findall(recipe_pattern, json_str, re.DOTALL)
+            
+            for recipe_str in recipe_matches:
+                try:
+                    # Clean up the recipe string
+                    recipe_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', recipe_str)
+                    recipe_str = re.sub(r',\s*}', '}', recipe_str)
+                    recipe_str = re.sub(r',\s*]', ']', recipe_str)
+                    
+                    recipe = json.loads(recipe_str)
+                    recipes.append(recipe)
+                except json.JSONDecodeError:
+                    continue
+                    
+            print(f"DEBUG: Parsed {len(recipes)} individual recipes")
+        except Exception as e:
+            print(f"DEBUG: Error parsing individual recipes: {e}")
+            
+        return recipes
+
     async def _tools_node(self, state: AgentState) -> AgentState:
         """Execute tool calls."""
+        print(f"DEBUG: _tools_node called")
         print(
             f"Tools node - tool calls: "
             f"{len(state.tool_calls) if state.tool_calls else 0}"
@@ -1325,6 +1549,7 @@ class ChefAgentGraph:
             f"Found recipes: {len(state.found_recipes) if state.found_recipes else 0}"
         )
         print(f"Days count: {state.days_count}")
+        print(f"Conversation state: {state.conversation_state}")
 
         if not getattr(state, "tool_calls", None):
             # If no tool calls but we have recipes and days, try to generate meal plan
@@ -1388,14 +1613,184 @@ class ChefAgentGraph:
                     f"Tool {tool_result.get('tool_name', 'unknown')} "
                     f"executed successfully"
                 )
+                
+                # Handle search_recipes results
+                if tool_result.get("tool_name") == "search_recipes":
+                    recipes = tool_result.get("recipes", [])
+                    if recipes:
+                        state.found_recipes = recipes
+                        print(f"DEBUG: Found {len(recipes)} recipes from search_recipes")
+                    else:
+                        print("DEBUG: No recipes found from search_recipes")
+                        state.found_recipes = []
             else:
                 print(
                     f"Tool {tool_result.get('tool_name', 'unknown')} "
                     f"failed: {tool_result.get('error', 'unknown error')}"
                 )
 
+        # Check if we need to create recipes after search
+        # Create recipes if:
+        # 1. No recipes found at all, OR
+        # 2. User asked for specific difficulty but found recipes don't match that difficulty
+        should_create_recipes = False
+        
+        if not state.found_recipes or len(state.found_recipes) == 0:
+            should_create_recipes = True
+            print("DEBUG: No recipes found, creating them with LLM")
+        elif state.difficulty:
+            # Check if found recipes match the requested difficulty
+            matching_difficulty = [r for r in state.found_recipes if r.difficulty == state.difficulty]
+            if len(matching_difficulty) == 0:
+                should_create_recipes = True
+                print(f"DEBUG: Found recipes don't match requested difficulty '{state.difficulty}', creating new ones with LLM")
+                # Clear existing recipes since they don't match
+                state.found_recipes = []
+        elif state.diet_goal:
+            # Check if found recipes match the requested diet type
+            matching_diet = [r for r in state.found_recipes if r.diet_type and (r.diet_type.value if hasattr(r.diet_type, 'value') else r.diet_type) == state.diet_goal]
+            if len(matching_diet) == 0:
+                should_create_recipes = True
+                print(f"DEBUG: Found recipes don't match requested diet type '{state.diet_goal}', creating new ones with LLM")
+                # Clear existing recipes since they don't match
+                state.found_recipes = []
+        
+        if should_create_recipes:
+            # Create recipes using LLM
+            try:
+                # Determine recipe type and difficulty
+                recipe_type = state.diet_goal or "general"
+                difficulty_level = state.difficulty or "medium"
+                
+                recipe_generation_prompt = f"""
+                You are a recipe generator. Create 6 diverse {recipe_type} recipes with {difficulty_level} difficulty level.
+                Include breakfast, lunch, dinner, and snack options.
+
+                For each recipe, provide:
+                - Title
+                - Description
+                - Detailed cooking instructions
+                - Ingredients with quantities and units
+                - Preparation time in minutes
+                - Cooking time in minutes
+                - Number of servings (2-4)
+                - Difficulty level: {difficulty_level} (all recipes must be {difficulty_level})
+                - Relevant tags
+
+                IMPORTANT: 
+                - All quantities must be strings, not numbers!
+                - ALL recipes must have difficulty level "{difficulty_level}"
+                - Return ONLY valid JSON array, no other text
+                - No markdown formatting, no explanations, just pure JSON
+                - Use regular quotes, not backticks or special characters
+                - Instructions should be a single string, not multiline
+
+                Return this exact format:
+                [
+                    {{
+                        "title": "Recipe Title",
+                        "description": "Recipe description",
+                        "instructions": "Step-by-step instructions as a single string",
+                        "ingredients": [
+                            {{"name": "ingredient", "quantity": "2", "unit": "cups"}},
+                            {{"name": "salt", "quantity": "1/2", "unit": "tsp"}}
+                        ],
+                        "prep_time_minutes": 15,
+                        "cook_time_minutes": 30,
+                        "servings": 4,
+                        "difficulty": "{difficulty_level}",
+                        "tags": ["tag1", "tag2"]
+                    }}
+                ]
+                """
+                
+                response = await self.llm.ainvoke(recipe_generation_prompt)
+                
+                # Parse LLM response
+                import json
+                import re
+                
+                # Clean the response content
+                content = response.content
+                print(f"DEBUG: LLM response length: {len(content)}")
+                print(f"DEBUG: First 500 chars: {content[:500]}")
+                
+                # Sanitize the LLM response to fix Unicode issues
+                try:
+                    sanitized_content = self._sanitize_llm_json(content)
+                    print(f"DEBUG: Sanitized JSON: {sanitized_content[:200]}...")
+                    recipes_data = json.loads(sanitized_content)
+                    print(f"DEBUG: Successfully parsed sanitized JSON with {len(recipes_data)} recipes")
+                except Exception as e:
+                    print(f"DEBUG: Error sanitizing/parsing JSON: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    recipes_data = []
+                
+                # Create recipes using the create_recipe tool
+                created_recipes = []
+                print(f"DEBUG: About to create {len(recipes_data)} recipes")
+                try:
+                    from agent.tools import create_recipe
+                    print(f"DEBUG: Successfully imported create_recipe tool")
+                    
+                    for i, recipe_data in enumerate(recipes_data[:6]):  # Limit to 6 recipes
+                        print(f"DEBUG: Creating recipe {i+1}: {recipe_data.get('title', 'Unknown')}")
+                        try:
+                            result = await create_recipe.ainvoke({
+                                "title": recipe_data["title"],
+                                "description": recipe_data.get("description", ""),
+                                "instructions": recipe_data.get("instructions", ""),
+                                "diet_type": state.diet_goal,
+                                "prep_time_minutes": recipe_data.get("prep_time_minutes"),
+                                "cook_time_minutes": recipe_data.get("cook_time_minutes"),
+                                "servings": recipe_data.get("servings"),
+                                "difficulty": recipe_data.get("difficulty"),
+                                "ingredients": recipe_data.get("ingredients", []),
+                                "user_id": "test_user",
+                            })
+                            
+                            print(f"DEBUG: Recipe creation result: {result}")
+                            if result.get("success"):
+                                created_recipes.append(result["recipe"])
+                                print(f"DEBUG: Created recipe: {recipe_data['title']}")
+                            else:
+                                print(f"DEBUG: Failed to create recipe: {result.get('error')}")
+                                
+                        except Exception as e:
+                            print(f"DEBUG: Error creating recipe {recipe_data.get('title', 'Unknown')}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            continue
+                            
+                except Exception as e:
+                    print(f"DEBUG: Error in recipe creation: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    created_recipes = []
+                
+                print(f"DEBUG: Final created_recipes count: {len(created_recipes)}")
+                if created_recipes:
+                    state.found_recipes = created_recipes
+                    print(f"DEBUG: Created {len(created_recipes)} custom recipes")
+                else:
+                    print("DEBUG: Failed to create any recipes")
+                    state.found_recipes = []
+                    
+            except Exception as e:
+                print(f"DEBUG: Error in LLM recipe generation: {e}")
+                state.found_recipes = []
+
         # Clear tool_calls after execution to prevent memory leaks
         state.tool_calls = []
+
+        # If we have recipes and days count, generate meal plan
+        if (state.found_recipes and len(state.found_recipes) > 0 and 
+            state.days_count is not None and 
+            state.conversation_state == ConversationState.GENERATING_PLAN):
+            print(f"DEBUG: _tools_node - have recipes and days_count, generating meal plan")
+            await self._generate_meal_plan_from_state(state)
+            state.conversation_state = ConversationState.COMPLETED
 
         return state
 
@@ -1403,6 +1798,10 @@ class ChefAgentGraph:
         """Generate meal plan from existing state."""
         try:
             from domain.meal_plan_generator import MealPlanGenerator
+
+            print(f"DEBUG: _generate_meal_plan_from_state - diet_goal: {state.diet_goal}")
+            print(f"DEBUG: _generate_meal_plan_from_state - days_count: {state.days_count}")
+            print(f"DEBUG: _generate_meal_plan_from_state - found_recipes: {len(state.found_recipes) if state.found_recipes else 0}")
 
             meal_plan, fallback_used = MealPlanGenerator.generate_meal_plan(
                 recipes=state.found_recipes,
@@ -1499,6 +1898,9 @@ class ChefAgentGraph:
 
             # Execute the tool
             result = await tool_func.ainvoke(tool_args)
+            # Add tool name to result for debugging
+            if isinstance(result, dict):
+                result["tool_name"] = tool_name
             return result
 
         except Exception as e:
@@ -1628,17 +2030,49 @@ class ChefAgentGraph:
                         recipes = tool_result["recipes"]
                         if recipes:
                             response_parts.append(
-                                f"I found {len(recipes)} recipes for you:"
+                                f"I found {len(recipes)} recipes for you:\n"
                             )
                             for i, recipe in enumerate(
                                 recipes[:3], 1
                             ):  # Show first 3
-                                response_parts.append(f"{i}. {recipe.title}")
+                                # Clean up recipe title by removing ID suffix
+                                clean_title = recipe.title
+                                if ' ' in clean_title:
+                                    # Remove the last part if it looks like an ID
+                                    parts = clean_title.split(' ')
+                                    if parts[-1].isdigit() and len(parts[-1]) > 8:
+                                        clean_title = ' '.join(parts[:-1])
+                                
+                                response_parts.append(f"{i}. {clean_title}")
+                                if recipe.description:
+                                    response_parts.append(f"   {recipe.description}")
+                                response_parts.append(f"   Prep time: {recipe.prep_time_minutes} min | Serves: {recipe.servings}")
                         else:
-                            response_parts.append(
-                                "I couldn't find any recipes matching your "
-                                "criteria."
-                            )
+                            # Check if we have recipes in state.found_recipes
+                            if state.found_recipes:
+                                response_parts.append(
+                                    f"I found {len(state.found_recipes)} recipes for you:\n"
+                                )
+                                for i, recipe in enumerate(
+                                    state.found_recipes[:3], 1
+                                ):  # Show first 3
+                                    # Clean up recipe title by removing ID suffix
+                                    clean_title = recipe.title
+                                    if ' ' in clean_title:
+                                        # Remove the last part if it looks like an ID
+                                        parts = clean_title.split(' ')
+                                        if parts[-1].isdigit() and len(parts[-1]) > 8:
+                                            clean_title = ' '.join(parts[:-1])
+                                    
+                                    response_parts.append(f"{i}. {clean_title}")
+                                    if recipe.description:
+                                        response_parts.append(f"   {recipe.description}")
+                                    response_parts.append(f"   Prep time: {recipe.prep_time_minutes} min | Serves: {recipe.servings}")
+                            else:
+                                response_parts.append(
+                                    "I couldn't find any recipes matching your "
+                                    "criteria."
+                                )
 
                     elif "shopping_list" in tool_result:
                         # Handle shopping list results
@@ -1836,47 +2270,40 @@ class ChefAgentGraph:
     async def process_request(self, request: ChatRequest) -> ChatResponse:
         """Process a chat request and return a response."""
         try:
-            # Try to load existing state from memory
+            # Configure for LangGraph execution
             config = {
-                "thread_id": request.thread_id,
+                "configurable": {
+                    "thread_id": request.thread_id,
+                },
                 "recursion_limit": 10,  # Prevent infinite loops
             }
 
-            # Get existing state or create new one
-            try:
-                existing_state = await self.graph.aget_state(config)
-                if existing_state and existing_state.values:
-                    # Load existing state and add new message
-                    initial_state = existing_state.values
-                    initial_state.messages.append(
-                        {"role": "user", "content": request.message}
-                    )
-                else:
-                    # Create new state
-                    initial_state = AgentState(
-                        thread_id=request.thread_id,
-                        messages=[
-                            {"role": "user", "content": request.message}
-                        ],
-                        language=request.language,
-                    )
-            except Exception:
-                # If loading fails, create new state
-                initial_state = AgentState(
-                    thread_id=request.thread_id,
-                    messages=[{"role": "user", "content": request.message}],
-                    language=request.language,
-                )
+            print(f"DEBUG: process_request - processing message: '{request.message}' with thread_id: {request.thread_id}")
 
-            # Process through the graph (LangGraph handles memory via
-            # checkpointer)
-
+            # Process through the graph (LangGraph handles memory via checkpointer)
+            # The graph will load existing state if it exists, or create new if not
+            
             # Set timeout for entire graph execution (2 minutes)
             import asyncio
 
-            final_state = await asyncio.wait_for(
-                self.graph.ainvoke(initial_state, config=config), timeout=120.0
-            )
+            # Use ainvoke to properly handle state with checkpointer
+            # Pass the user message directly, LangGraph will handle state management
+            try:
+                # Create input for the graph - just the user message
+                graph_input = {
+                    "thread_id": request.thread_id,
+                    "messages": [{"role": "user", "content": request.message}],
+                    "language": request.language,
+                }
+                
+                final_state = await asyncio.wait_for(
+                    self.graph.ainvoke(graph_input, config=config),
+                    timeout=120.0
+                )
+                print(f"DEBUG: process_request - final_state: {final_state}")
+            except Exception as e:
+                print(f"DEBUG: process_request - error: {e}")
+                final_state = {"messages": [{"role": "assistant", "content": f"I apologize, but I encountered an error: {str(e)}"}]}
 
             # Extract response
             # final_state can be AddableValuesDict, AgentState, or None
