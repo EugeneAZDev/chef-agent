@@ -65,7 +65,9 @@ class AgentState(BaseModel):
         None, description="Current user request"
     )
     diet_goal: Optional[str] = Field(None, description="User's diet goal")
-    difficulty: Optional[str] = Field(None, description="Recipe difficulty level")
+    difficulty: Optional[str] = Field(
+        None, description="Recipe difficulty level"
+    )
     days_count: Optional[int] = Field(
         None, ge=3, le=7, description="Number of days for meal plan (3-7)"
     )
